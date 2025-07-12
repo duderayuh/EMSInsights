@@ -128,6 +128,14 @@ Changelog:
   - Full control over Rdio Scanner instance on deployment servers
   - **DATABASE RESET**: Cleared all call data (31 calls, 2 hospital calls, 0 incidents, 31 audio segments) for fresh deployment
   - **SECOND DATABASE RESET**: Additional cleanup requested - cleared 31 emergency calls, 2 hospital calls, 27 hospital segments, 31 audio segments for completely fresh start
+  - **ENHANCED AUTOMATIC RESTART SYSTEM**: Implemented robust restart mechanisms to prevent service shutdowns
+    - Health checks every 10 seconds (down from 30 seconds) with actual connectivity testing
+    - Automatic restart in 2 seconds (down from 5 seconds) when failures detected
+    - Consecutive failure tracking with reset on successful health checks
+    - Force restart capability triggered by ECONNREFUSED errors in proxy requests
+    - Enhanced monitoring includes both process existence and HTTP connectivity verification
+    - Proxy routes now automatically trigger restart attempts when connection failures occur
+    - System provides better error messages explaining automatic restart process to users
 
 - July 12, 2025: CRITICAL FIX - Unit Display Database Query Resolution
   - **UNIT EXTRACTION FULLY OPERATIONAL WITH UI DISPLAY**: Fixed critical database query issue preventing units from appearing in UI

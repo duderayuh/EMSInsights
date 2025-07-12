@@ -11,9 +11,12 @@ export class RdioScannerManager extends EventEmitter {
   private autoRestart: boolean = true;
   private restartAttempts: number = 0;
   private maxRestartAttempts: number = 5;
-  private restartDelay: number = 5000; // 5 seconds
+  private restartDelay: number = 2000; // 2 seconds (faster restart)
   private healthCheckInterval: NodeJS.Timeout | null = null;
-  private healthCheckFrequency: number = 30000; // 30 seconds
+  private healthCheckFrequency: number = 10000; // 10 seconds (more frequent)
+  private lastHealthCheck: Date = new Date();
+  private consecutiveFailures: number = 0;
+  private maxConsecutiveFailures: number = 3;
 
   constructor() {
     super();
@@ -227,8 +230,43 @@ export class RdioScannerManager extends EventEmitter {
       port: this.port,
       autoRestart: this.autoRestart,
       restartAttempts: this.restartAttempts,
-      maxRestartAttempts: this.maxRestartAttempts
+      maxRestartAttempts: this.maxRestartAttempts,
+      consecutiveFailures: this.consecutiveFailures,
+      lastHealthCheck: this.lastHealthCheck
     };
+  }
+
+  /**
+   * Force restart immediately (used when proxy requests fail)
+   */
+  async forceRestart(): Promise<boolean> {
+    console.log('Force restarting Rdio Scanner due to connection failure');
+    
+    // Stop current process
+    if (this.process) {
+      try {
+        this.process.kill('SIGKILL');
+      } catch (err) {
+        // Ignore kill errors
+      }
+    }
+    
+    // Clean up PID file
+    if (existsSync(this.pidFile)) {
+      try {
+        unlinkSync(this.pidFile);
+      } catch (err) {
+        // Ignore cleanup errors
+      }
+    }
+    
+    // Reset counters
+    this.consecutiveFailures = 0;
+    this.restartAttempts = 0;
+    this.process = null;
+    
+    // Start immediately
+    return await this.start();
   }
 
   /**
@@ -289,20 +327,59 @@ export class RdioScannerManager extends EventEmitter {
       clearInterval(this.healthCheckInterval);
     }
 
-    this.healthCheckInterval = setInterval(() => {
-      const running = this.isRunning();
-      
-      if (!running && this.autoRestart) {
-        console.log('Rdio Scanner server health check failed - server not running. Attempting restart...');
-        this.restartAttempts = 0; // Reset attempts for health check restarts
-        this.start().catch(error => {
-          console.error('Health check restart failed:', error);
-          this.emit('health-check-failed', error);
-        });
-      } else if (running) {
-        this.emit('health-check-passed');
+    this.healthCheckInterval = setInterval(async () => {
+      try {
+        const running = this.isRunning();
+        this.lastHealthCheck = new Date();
+        
+        // Test actual connectivity to the server
+        let isHealthy = false;
+        if (running) {
+          try {
+            const response = await fetch(`http://localhost:${this.port}/`, {
+              method: 'HEAD',
+              timeout: 5000
+            });
+            isHealthy = response.ok;
+          } catch (error) {
+            console.log('Rdio Scanner connectivity test failed:', error);
+            isHealthy = false;
+          }
+        }
+        
+        if (!running || !isHealthy) {
+          this.consecutiveFailures++;
+          console.log(`Rdio Scanner health check failed (${this.consecutiveFailures}/${this.maxConsecutiveFailures}) - Process running: ${running}, Connectivity: ${isHealthy}`);
+          
+          if (this.consecutiveFailures >= this.maxConsecutiveFailures && this.autoRestart) {
+            console.log('Maximum consecutive failures reached, restarting Rdio Scanner');
+            this.restartAttempts = 0; // Reset attempts for health check restarts
+            this.start().catch(error => {
+              console.error('Health check restart failed:', error);
+              this.emit('health-check-failed', error);
+            });
+          }
+        } else {
+          // Reset failure count on successful health check
+          this.consecutiveFailures = 0;
+          this.emit('health-check-passed');
+        }
+      } catch (error) {
+        this.consecutiveFailures++;
+        console.error(`Health check error (${this.consecutiveFailures}/${this.maxConsecutiveFailures}):`, error);
+        
+        if (this.consecutiveFailures >= this.maxConsecutiveFailures && this.autoRestart) {
+          console.log('Maximum consecutive health check errors reached, restarting Rdio Scanner');
+          this.restartAttempts = 0;
+          this.start().catch(error => {
+            console.error('Health check restart failed:', error);
+            this.emit('health-check-failed', error);
+          });
+        }
       }
     }, this.healthCheckFrequency);
+    
+    console.log(`Health monitoring started - checking every ${this.healthCheckFrequency/1000} seconds`);
   }
 
   /**

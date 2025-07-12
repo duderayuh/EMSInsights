@@ -233,13 +233,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         port: err.port
       });
       
+      // Trigger automatic restart when connection fails
+      if (err.code === 'ECONNREFUSED' && rdioScannerManager) {
+        console.log('ECONNREFUSED detected - triggering Rdio Scanner restart');
+        rdioScannerManager.forceRestart().then(success => {
+          if (success) {
+            console.log('Rdio Scanner restarted successfully after connection failure');
+          } else {
+            console.error('Failed to restart Rdio Scanner after connection failure');
+          }
+        }).catch(restartError => {
+          console.error('Error restarting Rdio Scanner after connection failure:', restartError);
+        });
+      }
+      
       if (!res.headersSent) {
         res.status(502).json({ 
           error: 'Rdio Scanner service unavailable', 
           details: `Unable to connect to local Rdio Scanner. Error: ${err.message}`,
           target: `http://${targetHost}:${targetPort}`,
           errorCode: err.code,
-          suggestion: 'Make sure Rdio Scanner service is running on port 3001'
+          suggestion: 'Rdio Scanner service is being restarted automatically. Please try again in a few seconds.'
         });
       }
     });

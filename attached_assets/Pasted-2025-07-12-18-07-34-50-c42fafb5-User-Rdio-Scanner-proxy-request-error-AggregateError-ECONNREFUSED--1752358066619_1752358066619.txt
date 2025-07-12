@@ -1,0 +1,136 @@
+2025-07-12 18:07:34.50
+c42fafb5
+User
+Rdio Scanner proxy request error: AggregateError [ECONNREFUSED]:
+2025-07-12 18:07:34.50
+c42fafb5
+User
+at internalConnectMultiple (node:net:1122:18)
+2025-07-12 18:07:34.50
+c42fafb5
+User
+at afterConnectMultiple (node:net:1689:7) {
+2025-07-12 18:07:34.50
+c42fafb5
+User
+code: 'ECONNREFUSED',
+2025-07-12 18:07:34.50
+c42fafb5
+User
+[errors]: [
+2025-07-12 18:07:34.50
+c42fafb5
+User
+Error: connect ECONNREFUSED ::1:3001
+2025-07-12 18:07:34.50
+c42fafb5
+User
+at createConnectionError (node:net:1652:14)
+2025-07-12 18:07:34.50
+c42fafb5
+User
+at afterConnectMultiple (node:net:1682:16) {
+2025-07-12 18:07:34.50
+c42fafb5
+User
+errno: -111,
+2025-07-12 18:07:34.50
+c42fafb5
+User
+code: 'ECONNREFUSED',
+2025-07-12 18:07:34.50
+c42fafb5
+User
+syscall: 'connect',
+2025-07-12 18:07:34.50
+c42fafb5
+User
+address: '::1',
+2025-07-12 18:07:34.50
+c42fafb5
+User
+port: 3001
+2025-07-12 18:07:34.50
+c42fafb5
+User
+},
+2025-07-12 18:07:34.50
+c42fafb5
+User
+Error: connect ECONNREFUSED 127.0.0.1:3001
+2025-07-12 18:07:34.50
+c42fafb5
+User
+at createConnectionError (node:net:1652:14)
+2025-07-12 18:07:34.50
+c42fafb5
+User
+at afterConnectMultiple (node:net:1682:16) {
+2025-07-12 18:07:34.50
+c42fafb5
+User
+errno: -111,
+2025-07-12 18:07:34.50
+c42fafb5
+User
+code: 'ECONNREFUSED',
+2025-07-12 18:07:34.50
+c42fafb5
+User
+syscall: 'connect',
+2025-07-12 18:07:34.50
+c42fafb5
+User
+address: '127.0.0.1',
+2025-07-12 18:07:34.50
+c42fafb5
+User
+port: 3001
+2025-07-12 18:07:34.50
+c42fafb5
+User
+}
+2025-07-12 18:07:34.50
+c42fafb5
+User
+]
+2025-07-12 18:07:34.50
+c42fafb5
+User
+}
+2025-07-12 18:07:34.50
+c42fafb5
+User
+Failed to connect to http://localhost:3001/api/call-upload
+2025-07-12 18:07:34.50
+c42fafb5
+User
+Error details: {
+2025-07-12 18:07:34.50
+c42fafb5
+User
+code: 'ECONNREFUSED',
+2025-07-12 18:07:34.50
+c42fafb5
+User
+message: '',
+2025-07-12 18:07:34.50
+c42fafb5
+User
+errno: undefined,
+2025-07-12 18:07:34.50
+c42fafb5
+User
+syscall: undefined,
+2025-07-12 18:07:34.50
+c42fafb5
+User
+hostname: undefined,
+2025-07-12 18:07:34.50
+c42fafb5
+User
+port: undefined
+2025-07-12 18:07:34.50
+c42fafb5
+User
+}

@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
+import { useEffect } from "react";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import AdminPage from "@/pages/admin";
@@ -22,6 +23,14 @@ function ProtectedRoute({ component: Component, adminOnly = false, superAdminOnl
   const { isAuthenticated, hasAdminAccess, isSuperAdmin, isLoading } = useAuth();
   const [location, setLocation] = useLocation();
 
+  // Handle redirect in useEffect to avoid setState during render
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      const redirectParam = location !== "/login" ? `?redirect=${encodeURIComponent(location)}` : "";
+      setLocation(`/login${redirectParam}`);
+    }
+  }, [isLoading, isAuthenticated, location, setLocation]);
+
   // Show loading while auth is being checked
   if (isLoading) {
     return (
@@ -34,11 +43,16 @@ function ProtectedRoute({ component: Component, adminOnly = false, superAdminOnl
     );
   }
 
-  // If not authenticated, redirect to login using wouter
+  // If not authenticated, show loading while redirect happens
   if (!isAuthenticated) {
-    const redirectParam = location !== "/login" ? `?redirect=${encodeURIComponent(location)}` : "";
-    setLocation(`/login${redirectParam}`);
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Redirecting to login...</p>
+        </div>
+      </div>
+    );
   }
 
   // Check super admin access if required

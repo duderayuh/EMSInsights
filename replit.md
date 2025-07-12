@@ -114,6 +114,22 @@ EMS-Insight is a real-time emergency dispatch monitoring system designed to proc
 
 ```
 Changelog:
+- July 12, 2025: Phase 112 completion - Medical Director Insights System & Critical Bug Fixes
+  - **MEDICAL DIRECTOR INSIGHTS SYSTEM**: Successfully implemented comprehensive medical director insights for emergency alert center
+  - Modified alert notification center to exclusively display medical director insights instead of general system alerts
+  - Added "Generate Insights" button to Public Health Analytics page for on-demand insight generation
+  - Created API endpoint `/api/analytics/medical-director-insights` with real-time data analysis
+  - Enhanced alert center with "Clear All" functionality and individual notification clearing
+  - Updated dialog title to "Medical Director Insights" for proper medical context
+  - **CRITICAL BUG FIX**: Resolved Drizzle ORM 500 error in enhanced incidents API endpoint
+  - Fixed "Cannot convert undefined or null to object" error in orderSelectedFields processing
+  - Simplified database query in getEnhancedIncidents() to avoid column reference issues
+  - Enhanced incidents endpoint now returns proper data instead of 500 errors
+  - Unit Tracking page now loads incidents without errors, showing 7 incidents successfully
+  - System provides real-time medical director insights with 30-second refresh intervals
+  - Complete integration between public health analytics and emergency alert notifications
+
+Changelog:
 - July 12, 2025: Project Organization & Complete Unit System Setup
   - **PROJECT CLEANUP**: Organized all one-time fix scripts into `scripts/one-time-fixes/` directory
   - Moved 47 utility scripts (fix-*, test-*, debug-*, reclassify-*, etc.) out of root directory

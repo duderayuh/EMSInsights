@@ -114,20 +114,17 @@ EMS-Insight is a real-time emergency dispatch monitoring system designed to proc
 
 ```
 Changelog:
-- July 12, 2025: CRITICAL FIX - Deployment-Safe Rdio Scanner Server Management
-  - **DEPLOYMENT ENVIRONMENT DETECTION**: Implemented deployment-aware Rdio Scanner server startup
-  - Enhanced rdio-scanner-manager.ts to detect deployment environments (REPLIT_DEPLOYMENT or NODE_ENV=production)
-  - In deployment environments, Rdio Scanner server gracefully skips startup without throwing errors
-  - Updated proxy routes to return helpful HTML page explaining service unavailability in deployment
-  - Fixed ECONNREFUSED errors on port 3001 by preventing connection attempts when server is unavailable
-  - Main EMS-Insight application continues to function normally even when Rdio Scanner is unavailable
-  - Improved user experience with clear messaging about deployment environment limitations
-  - System now handles both development (with Rdio Scanner) and deployment (without) environments seamlessly
-  - **EXTERNAL RDIO SCANNER SUPPORT**: Added support for external Rdio Scanner instance in deployment
-  - Proxy routes now detect RDIO_SCANNER_URL environment variable (http://hoosierems.replit.app:3001)
-  - In deployment environments, proxy forwards requests to external Rdio Scanner instead of localhost
-  - Both /rdio-scanner and /rdio-scanner/admin routes work in deployed environments
-  - System automatically switches between local (development) and external (deployment) Rdio Scanner instances
+- July 12, 2025: CRITICAL FIX - Local Rdio Scanner Server on All Environments
+  - **UNIFIED RDIO SCANNER DEPLOYMENT**: Updated system to run Rdio Scanner locally on all servers
+  - Removed deployment environment restrictions that prevented Rdio Scanner from starting
+  - Updated rdio-scanner-manager.ts to allow local Rdio Scanner startup in production environments
+  - Simplified proxy routes to always use localhost:3001 instead of external instances
+  - Fixed all /rdio-scanner and /rdio-scanner/admin routes to proxy to local instance
+  - Removed HTTPS handling and external URL configuration - everything runs locally
+  - System now provides consistent Rdio Scanner access across development and deployment
+  - Rdio Scanner server starts automatically with the main application on port 3001
+  - Improved reliability by eliminating external connection dependencies
+  - Full control over Rdio Scanner instance on deployment servers
 
 - July 12, 2025: CRITICAL FIX - Unit Display Database Query Resolution
   - **UNIT EXTRACTION FULLY OPERATIONAL WITH UI DISPLAY**: Fixed critical database query issue preventing units from appearing in UI

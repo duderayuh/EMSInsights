@@ -49,6 +49,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add cookie parser middleware FIRST - before all routes
   app.use(cookieParser());
   
+  // Test endpoint to check Rdio Scanner connectivity
+  app.get('/api/rdio-scanner/test', async (req, res) => {
+    const options = {
+      hostname: 'localhost',
+      port: 3001,
+      path: '/',
+      method: 'GET',
+      timeout: 5000
+    };
+    
+    const testReq = http.request(options, (testRes) => {
+      res.json({
+        success: true,
+        url: 'http://localhost:3001',
+        status: testRes.statusCode,
+        message: 'Local Rdio Scanner is reachable'
+      });
+    });
+    
+    testReq.on('error', (err) => {
+      res.json({
+        success: false,
+        url: 'http://localhost:3001',
+        error: err.message,
+        code: err.code
+      });
+    });
+    
+    testReq.on('timeout', () => {
+      testReq.destroy();
+      res.json({
+        success: false,
+        url: 'http://localhost:3001',
+        error: 'Connection timeout'
+      });
+    });
+    
+    testReq.end();
+  });
+
   // Rdio Scanner Web Interface Routes
   app.get(/^\/rdio-scanner$/, (req, res) => {
     // Redirect /rdio-scanner to /rdio-scanner/ to ensure consistent routing
@@ -74,24 +114,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     delete cleanHeaders['connection'];
     delete cleanHeaders['content-length'];
     
-    // Determine target host based on environment
-    const isDeployment = process.env.REPLIT_DEPLOYMENT || process.env.NODE_ENV === 'production';
-    let targetHost = 'localhost';
-    let targetPort = 3001;
-    let useHttps = false;
+    // Always use local Rdio Scanner instance
+    const targetHost = 'localhost';
+    const targetPort = 3001;
+    const useHttps = false;
     
-    if (isDeployment && process.env.RDIO_SCANNER_URL) {
-      // Parse external Rdio Scanner URL for deployment
-      try {
-        const externalUrl = new URL(process.env.RDIO_SCANNER_URL);
-        targetHost = externalUrl.hostname;
-        targetPort = parseInt(externalUrl.port) || (externalUrl.protocol === 'https:' ? 443 : 80);
-        useHttps = externalUrl.protocol === 'https:';
-        console.log(`Using external Rdio Scanner at ${useHttps ? 'https' : 'http'}://${targetHost}:${targetPort}`);
-      } catch (error) {
-        console.error('Invalid RDIO_SCANNER_URL:', process.env.RDIO_SCANNER_URL, error);
-      }
-    }
+    console.log(`Proxying to local Rdio Scanner at http://${targetHost}:${targetPort}`);
     
     const options = {
       hostname: targetHost,
@@ -206,15 +234,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       if (!res.headersSent) {
-        const errorMessage = isDeployment 
-          ? `Unable to connect to external Rdio Scanner at ${useHttps ? 'https' : 'http'}://${targetHost}:${targetPort}. Error: ${err.message}`
-          : `Rdio Scanner service unavailable. Error: ${err.message}`;
-          
         res.status(502).json({ 
           error: 'Rdio Scanner service unavailable', 
-          details: errorMessage,
-          target: `${useHttps ? 'https' : 'http'}://${targetHost}:${targetPort}`,
-          errorCode: err.code
+          details: `Unable to connect to local Rdio Scanner. Error: ${err.message}`,
+          target: `http://${targetHost}:${targetPort}`,
+          errorCode: err.code,
+          suggestion: 'Make sure Rdio Scanner service is running on port 3001'
         });
       }
     });

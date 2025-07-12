@@ -226,79 +226,69 @@ export class IncidentTracker {
    */
   async getEnhancedIncidents(): Promise<any[]> {
     try {
-      // Use raw SQL to avoid Drizzle ORM join issues
-      const result = await db.execute(sql`
-        SELECT 
-          i.id,
-          i.unit_id,
-          i.dispatch_time,
-          i.location,
-          i.call_type,
-          i.status,
-          i.inferred_closest_hospital,
-          i.actual_hospital_called,
-          i.hospital_destination,
-          i.transport_start_time,
-          i.eta_given,
-          i.eta_estimated,
-          i.eta_variance,
-          i.qi_flag,
-          i.transcript_dispatch_id,
-          i.transcript_hospital_id,
-          i.latitude,
-          i.longitude,
-          c.transcript as dispatch_transcript,
-          hc.conversation_analysis as hospital_transcript,
-          ch.latitude as hospital_latitude,
-          ch.longitude as hospital_longitude
-        FROM incidents i
-        LEFT JOIN calls c ON i.transcript_dispatch_id = c.id
-        LEFT JOIN hospital_calls hc ON i.transcript_hospital_id = hc.id
-        LEFT JOIN custom_hospitals ch ON ch.hospital_name = i.hospital_destination
-        ORDER BY i.dispatch_time DESC
-        LIMIT 100
-      `);
-
-      const rows = Array.isArray(result) ? result : (result.rows || []);
+      // First, let's check if we have any incidents at all
+      const incidentCount = await db.execute(sql`SELECT COUNT(*) as count FROM incidents`);
+      console.log('Total incidents in database:', incidentCount);
       
-      return rows.map((row: any) => {
-        // Calculate actual drive time if we have hospital destination and coordinates
-        let calculatedETA = row.eta_estimated;
-        let distanceToHospital: number | undefined;
-        
-        if (row.hospital_destination && row.latitude && row.longitude && row.hospital_latitude && row.hospital_longitude) {
-          // Calculate distance using Haversine formula
-          distanceToHospital = this.calculateHaversineDistance(
-            row.latitude, 
-            row.longitude, 
-            row.hospital_latitude, 
-            row.hospital_longitude
-          );
-          
-          // Calculate ETA based on actual distance
-          calculatedETA = this.calculateETA(row.location, distanceToHospital);
+      // If no incidents, return empty array
+      if (Array.isArray(incidentCount) && incidentCount.length > 0) {
+        const count = incidentCount[0]?.count || 0;
+        if (count === 0) {
+          console.log('No incidents found in database');
+          return [];
+        }
+      }
+      
+      // Use Drizzle ORM instead of raw SQL to avoid column issues
+      const incidentRecords = await db.select({
+        id: incidents.id,
+        unitId: incidents.unitId,
+        dispatchTime: incidents.dispatchTime,
+        location: incidents.location,
+        callType: incidents.callType,
+        status: incidents.status,
+        inferredClosestHospital: incidents.inferredClosestHospital,
+        actualHospitalCalled: incidents.actualHospitalCalled,
+        etaGiven: incidents.etaGiven,
+        etaEstimated: incidents.etaEstimated,
+        transcriptDispatchId: incidents.transcriptDispatchId,
+        transcriptHospitalId: incidents.transcriptHospitalId,
+        latitude: incidents.latitude,
+        longitude: incidents.longitude,
+        transportStartTime: incidents.transportStartTime
+      })
+      .from(incidents)
+      .orderBy(desc(incidents.dispatchTime))
+      .limit(100);
+      
+      console.log('Found incidents:', incidentRecords.length);
+      
+      return incidentRecords.map((row: any) => {
+        // Calculate response time if we have both dispatch and transport times
+        let responseTimeMinutes = null;
+        if (row.dispatchTime && row.transportStartTime) {
+          const dispatch = new Date(row.dispatchTime);
+          const transport = new Date(row.transportStartTime);
+          responseTimeMinutes = Math.round((transport.getTime() - dispatch.getTime()) / (1000 * 60));
         }
         
         return {
           id: row.id,
-          unitId: row.unit_id,
-          dispatchTime: row.dispatch_time,
+          unitId: row.unitId,
+          dispatchTime: row.dispatchTime,
           location: row.location,
-          callType: row.call_type,
+          callType: row.callType,
           status: row.status,
-          actualHospitalCalled: row.actual_hospital_called,
-          hospitalDestination: row.hospital_destination,
-          inferredClosestHospital: row.inferred_closest_hospital,
-          etaGiven: row.eta_given,
-          etaEstimated: calculatedETA,
-          distanceToHospital: distanceToHospital ? `${distanceToHospital.toFixed(1)} mi` : null,
-          etaVariance: row.eta_variance,
-          qiFlag: row.qi_flag,
-          dispatchTranscript: row.dispatch_transcript,
-          hospitalTranscript: row.hospital_transcript,
-          responseTime: row.transport_start_time && row.dispatch_time
-            ? Math.round((new Date(row.transport_start_time).getTime() - new Date(row.dispatch_time).getTime()) / 60000)
-            : null
+          hospitalCalled: row.actualHospitalCalled,
+          inferredHospital: row.inferredClosestHospital,
+          etaGiven: row.etaGiven,
+          etaEstimated: row.etaEstimated,
+          responseTimeMinutes,
+          latitude: row.latitude,
+          longitude: row.longitude,
+          // For backward compatibility
+          dispatchCallId: row.transcriptDispatchId,
+          hospitalCallId: row.transcriptHospitalId
         };
       });
     } catch (error) {
@@ -342,12 +332,10 @@ export class IncidentTracker {
     for (const incident of relatedIncidents) {
       await db.update(incidents)
         .set({
-          hospitalCallId: hospitalCall.id,
-          hospitalTime: hospitalCall.timestamp!,
-          actualArrivalTime: hospitalCall.timestamp!,
+          transcriptHospitalId: hospitalCall.id,
+          transportStartTime: hospitalCall.timestamp!,
           status: 'at_hospital',
-          transportStatus: 'at_hospital',
-          hospitalDestination: hospitalCall.hospital
+          actualHospitalCalled: hospitalCall.hospital
         })
         .where(eq(incidents.id, incident.id));
     }

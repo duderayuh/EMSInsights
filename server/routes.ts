@@ -4297,7 +4297,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Enhanced incidents endpoint with linked dispatch/hospital data
   app.get('/api/incidents/enhanced', requireAuth, async (req, res) => {
     try {
-      const { incidentTracker } = await import('./services/incident-tracker');
+      const { IncidentTracker } = await import('./services/incident-tracker');
+      const incidentTracker = new IncidentTracker();
       const enhancedIncidents = await incidentTracker.getEnhancedIncidents();
       res.json(enhancedIncidents);
     } catch (error) {
@@ -4309,7 +4310,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create incidents from existing data
   app.post('/api/incidents/create-from-data', requireAuth, async (req, res) => {
     try {
-      const { incidentTracker } = await import('./services/incident-tracker');
+      const { IncidentTracker } = await import('./services/incident-tracker');
+      const incidentTracker = new IncidentTracker();
       await incidentTracker.createIncidentsFromExistingData();
       res.json({ success: true, message: 'Incidents created from existing data' });
     } catch (error) {

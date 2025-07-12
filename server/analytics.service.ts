@@ -226,6 +226,85 @@ export class AnalyticsService {
     };
   }
 
+  // Generate Medical Director Insights for Emergency Alert Center
+  async generateMedicalDirectorInsights(): Promise<Array<{
+    id: string;
+    title: string;
+    message: string;
+    severity: 'critical' | 'high' | 'medium' | 'low';
+    category: 'medical_director';
+    timestamp: Date;
+    data: any;
+  }>> {
+    const insights: Array<{
+      id: string;
+      title: string;
+      message: string;
+      severity: 'critical' | 'high' | 'medium' | 'low';
+      category: 'medical_director';
+      timestamp: Date;
+      data: any;
+    }> = [];
+    
+    // Get current public health summary
+    const summary = await this.generateSummary(7);
+    
+    // Check for critical spikes
+    for (const spike of summary.spikeAlerts) {
+      if (spike.isSpike && spike.zScore > 3) {
+        insights.push({
+          id: `spike_${spike.chiefComplaint.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Date.now()}`,
+          title: `Critical ${spike.chiefComplaint} Spike Detected`,
+          message: `${spike.chiefComplaint} calls have increased by ${spike.percentIncrease}% (${spike.currentCount} calls vs ${spike.historicalMean.toFixed(1)} average). Z-score: ${spike.zScore.toFixed(2)}`,
+          severity: spike.zScore > 4 ? 'critical' : 'high',
+          category: 'medical_director',
+          timestamp: new Date(),
+          data: spike
+        });
+      }
+    }
+    
+    // Check for high-volume clusters
+    const clustersByType = summary.recentClusters.reduce((acc, cluster) => {
+      if (!acc[cluster.chiefComplaint]) {
+        acc[cluster.chiefComplaint] = [];
+      }
+      acc[cluster.chiefComplaint].push(cluster);
+      return acc;
+    }, {} as Record<string, typeof summary.recentClusters>);
+    
+    for (const [complaint, clusters] of Object.entries(clustersByType)) {
+      if (clusters.length >= 3) {
+        const totalCalls = clusters.reduce((sum, cluster) => sum + cluster.count, 0);
+        insights.push({
+          id: `cluster_${complaint.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Date.now()}`,
+          title: `Geographic Clustering Alert: ${complaint}`,
+          message: `${totalCalls} ${complaint} calls clustered in ${clusters.length} locations within 24 hours. Review for potential outbreak or incident.`,
+          severity: totalCalls > 10 ? 'high' : 'medium',
+          category: 'medical_director',
+          timestamp: new Date(),
+          data: { complaint, clusters, totalCalls }
+        });
+      }
+    }
+    
+    // Check for high daily volumes
+    const highVolumeThreshold = 20; // Threshold for high daily volume
+    if (summary.totalCalls > highVolumeThreshold) {
+      insights.push({
+        id: `high_volume_${Date.now()}`,
+        title: 'High Public Health Call Volume',
+        message: `${summary.totalCalls} public health calls in the last 7 days. Top concerns: ${summary.topComplaints.slice(0, 2).map(c => `${c.chiefComplaint} (${c.count})`).join(', ')}`,
+        severity: 'medium',
+        category: 'medical_director',
+        timestamp: new Date(),
+        data: { totalCalls: summary.totalCalls, topComplaints: summary.topComplaints }
+      });
+    }
+    
+    return insights;
+  }
+
   // Generate AI insights (optional)
   async generateAIInsight(summary: PublicHealthSummary): Promise<string> {
     // This would integrate with OpenAI/Claude API

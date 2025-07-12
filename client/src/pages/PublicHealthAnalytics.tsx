@@ -6,7 +6,11 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Line, LineChart, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { MapPin, TrendingUp, Activity, Brain, AlertTriangle, Calendar } from 'lucide-react';
+import { MapPin, TrendingUp, Activity, Brain, AlertTriangle, Calendar, Bell } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 import { GoogleMapView } from '@/components/GoogleMapView';
 import { format } from 'date-fns';
 
@@ -60,6 +64,45 @@ const getComplaintColor = (complaint: string): string => {
   }
   return complaintTypeColors.default;
 };
+
+function GenerateInsightsButton() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
+  const generateInsightsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('GET', '/api/analytics/medical-director-insights');
+      return response;
+    },
+    onSuccess: (insights) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/analytics/medical-director-insights'] });
+      toast({
+        title: 'Medical Director Insights Generated',
+        description: `Generated ${insights.length} new insights for emergency alert center`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error generating insights',
+        description: 'Failed to generate medical director insights',
+        variant: 'destructive',
+      });
+    }
+  });
+
+  return (
+    <Button 
+      onClick={() => generateInsightsMutation.mutate()}
+      disabled={generateInsightsMutation.isPending}
+      variant="outline"
+      size="sm"
+      className="flex items-center gap-2"
+    >
+      <Bell className="h-4 w-4" />
+      {generateInsightsMutation.isPending ? 'Generating...' : 'Generate Insights'}
+    </Button>
+  );
+}
 
 export default function PublicHealthAnalytics() {
   const [dateRange, setDateRange] = useState('7');
@@ -166,17 +209,20 @@ export default function PublicHealthAnalytics() {
           </p>
         </div>
         
-        <Select value={dateRange} onValueChange={setDateRange}>
-          <SelectTrigger className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="1">Last 24 hours</SelectItem>
-            <SelectItem value="7">Last 7 days</SelectItem>
-            <SelectItem value="30">Last 30 days</SelectItem>
-            <SelectItem value="90">Last 90 days</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <GenerateInsightsButton />
+          <Select value={dateRange} onValueChange={setDateRange}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">Last 24 hours</SelectItem>
+              <SelectItem value="7">Last 7 days</SelectItem>
+              <SelectItem value="30">Last 30 days</SelectItem>
+              <SelectItem value="90">Last 90 days</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Spike Alerts */}

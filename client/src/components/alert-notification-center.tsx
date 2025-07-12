@@ -46,51 +46,48 @@ export function AlertNotificationCenter({ onCriticalAlert }: AlertNotificationCe
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch unread alerts
-  const { data: unreadAlerts = [], refetch: refetchUnreadAlerts } = useQuery({
-    queryKey: ['/api/alerts/unread'],
-    refetchInterval: 5000 // Check for new alerts every 5 seconds
+  // Fetch medical director insights instead of general alerts
+  const { data: medicalDirectorInsights = [], refetch: refetchInsights } = useQuery({
+    queryKey: ['/api/analytics/medical-director-insights'],
+    refetchInterval: 30000 // Check for new insights every 30 seconds
   });
 
-  // Fetch all recent alerts for the notification center
-  const { data: allAlerts = [] } = useQuery({
-    queryKey: ['/api/alerts'],
-    queryFn: () => apiRequest('/api/alerts?limit=50'),
-    enabled: isOpen
-  });
+  // State for cleared notifications
+  const [clearedInsights, setClearedInsights] = useState<Set<string>>(new Set());
 
-  // Mark alert as read mutation
-  const markAsReadMutation = useMutation({
-    mutationFn: (alertId: number) => apiRequest(`/api/alerts/${alertId}/read`, {
-      method: 'PATCH'
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/alerts'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/alerts/unread'] });
-    }
-  });
+  // Clear all notifications
+  const clearAllNotifications = () => {
+    const allIds = medicalDirectorInsights.map((insight: any) => insight.id);
+    setClearedInsights(new Set(allIds));
+    toast({
+      title: 'All notifications cleared',
+      description: 'Medical director insights have been cleared',
+    });
+  };
 
-  // Acknowledge alert mutation
-  const acknowledgeMutation = useMutation({
-    mutationFn: (alertId: number) => apiRequest(`/api/alerts/${alertId}/acknowledge`, {
-      method: 'PATCH'
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/alerts'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/alerts/unread'] });
-    }
-  });
+  // Clear individual notification
+  const clearNotification = (id: string) => {
+    setClearedInsights(prev => new Set([...prev, id]));
+  };
 
-  // Delete alert mutation
-  const deleteAlertMutation = useMutation({
-    mutationFn: (alertId: number) => apiRequest(`/api/alerts/${alertId}`, {
-      method: 'DELETE'
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/alerts'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/alerts/unread'] });
-    }
-  });
+  // Filter out cleared insights and convert to alert format
+  const filteredInsights = medicalDirectorInsights.filter((insight: any) => !clearedInsights.has(insight.id));
+  const allAlerts = filteredInsights.map((insight: any) => ({
+    id: insight.id,
+    type: insight.category,
+    title: insight.title,
+    message: insight.message,
+    severity: insight.severity,
+    category: insight.category,
+    isRead: false,
+    isAcknowledged: false,
+    soundEnabled: true,
+    visualHighlight: true,
+    createdAt: insight.timestamp,
+    relatedData: insight.data
+  }));
+
+  const unreadAlerts = allAlerts; // All insights are considered unread until cleared
 
   // WebSocket for real-time alerts
   useEffect(() => {
@@ -119,16 +116,13 @@ export function AlertNotificationCenter({ onCriticalAlert }: AlertNotificationCe
           onCriticalAlert(alert);
         }
 
-        // Refresh alerts
-        refetchUnreadAlerts();
-        if (isOpen) {
-          queryClient.invalidateQueries({ queryKey: ['/api/alerts'] });
-        }
+        // Refresh insights
+        refetchInsights();
       }
     };
 
     return () => ws.close();
-  }, [soundEnabled, onCriticalAlert, isOpen, refetchUnreadAlerts, queryClient, toast]);
+  }, [soundEnabled, onCriticalAlert, isOpen, refetchInsights, queryClient, toast]);
 
   const playAlertSound = (severity: string) => {
     const audio = new Audio();
@@ -200,8 +194,19 @@ export function AlertNotificationCenter({ onCriticalAlert }: AlertNotificationCe
       <DialogContent className="max-w-2xl max-h-[600px]">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
-            <span>Emergency Alert Center</span>
+            <span>Medical Director Insights</span>
             <div className="flex items-center gap-2">
+              {allAlerts.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAllNotifications}
+                  title="Clear all notifications"
+                >
+                  <X className="h-4 w-4" />
+                  <span className="ml-1">Clear All</span>
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

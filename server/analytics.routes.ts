@@ -64,4 +64,15 @@ router.get('/trends', requireAuth, async (req, res) => {
   }
 });
 
+// Get medical director insights for emergency alert center
+router.get('/medical-director-insights', requireAuth, async (req, res) => {
+  try {
+    const insights = await analyticsService.generateMedicalDirectorInsights();
+    res.json(insights);
+  } catch (error) {
+    console.error('Error generating medical director insights:', error);
+    res.status(500).json({ error: 'Failed to generate medical director insights' });
+  }
+});
+
 export const analyticsRoutes = router;

@@ -173,7 +173,7 @@ function MiniMap({ latitude, longitude, location }: { latitude: number | null, l
   return <div ref={mapRef} className="h-48 w-full rounded-lg border border-gray-200 dark:border-gray-700" />;
 }
 
-export function CallDetailModal({ call, onClose }: CallDetailModalProps) {
+export function CallDetailModal({ call: initialCall, onClose }: CallDetailModalProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [isPlaying, setIsPlaying] = useState(false);
@@ -184,6 +184,16 @@ export function CallDetailModal({ call, onClose }: CallDetailModalProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
+  // Fetch the full call details including units
+  const { data: call = initialCall, isLoading: isLoadingCall } = useQuery({
+    queryKey: [`/api/calls/${initialCall.id}`],
+    enabled: !!initialCall.id
+  });
+  
   const [editData, setEditData] = useState({
     transcript: call.transcript || '',
     callType: call.callType || '',
@@ -197,9 +207,6 @@ export function CallDetailModal({ call, onClose }: CallDetailModalProps) {
   const [selectedUnits, setSelectedUnits] = useState<number[]>(
     call.units?.map((unit: any) => unit.id) || []
   );
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   
   // Fetch available unit tags
   const { data: availableUnits = [] } = useQuery({
@@ -209,6 +216,23 @@ export function CallDetailModal({ call, onClose }: CallDetailModalProps) {
 
 
 
+  // Update edit data and selected units when call data changes
+  useEffect(() => {
+    if (call) {
+      setEditData({
+        transcript: call.transcript || '',
+        callType: call.callType || '',
+        location: call.location || '',
+        latitude: call.latitude?.toString() || '',
+        longitude: call.longitude?.toString() || '',
+        urgencyScore: call.urgencyScore?.toString() || '',
+        priority: call.priority || '',
+        status: call.status || 'active'
+      });
+      setSelectedUnits(call.units?.map((unit: any) => unit.id) || []);
+    }
+  }, [call]);
+  
   // Calculate closest hospital
   const [closestHospital, setClosestHospital] = useState<{ hospital: any; distance: number } | null>(null);
   

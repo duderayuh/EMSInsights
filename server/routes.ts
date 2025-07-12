@@ -487,6 +487,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return false;
           }
           
+          // For dispatch calls (10202, 10244): require unit, address, and call type
+          // Only apply this strict filtering for dispatch talkgroups
+          if (call.talkgroup === '10202' || call.talkgroup === '10244') {
+            const hasValidCallType = call.callType && 
+                                    call.callType !== 'Unknown' && 
+                                    call.callType !== 'Non-Emergency Content';
+            const hasLocation = call.location && call.location.trim().length > 0;
+            
+            // Check if transcript contains unit patterns or if units have been extracted
+            const unitPatterns = /\b(ambulance|ems|medic|squad|engine|ladder|rescue|truck|battalion|chief)\s*\d+/i;
+            const hasUnitsInTranscript = call.transcript && unitPatterns.test(call.transcript);
+            const hasExtractedUnits = call.units && call.units.length > 0;
+            const hasUnits = hasUnitsInTranscript || hasExtractedUnits;
+            
+            // Require all three for dispatch visibility
+            if (!hasValidCallType || !hasLocation || !hasUnits) {
+              filteredCount++;
+              return false;
+            }
+          }
+          
           return true;
         });
       }

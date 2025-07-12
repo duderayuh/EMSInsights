@@ -166,6 +166,24 @@ export function CallFeedSidebar({
                     <div className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
                       {call.callType || 'Unknown'}
                     </div>
+                    {call.units && call.units.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-1">
+                        {call.units.map((unit: any) => (
+                          <Badge 
+                            key={unit.id} 
+                            variant="secondary"
+                            className="text-xs"
+                            style={{ 
+                              backgroundColor: unit.color || '#3B82F6', 
+                              color: '#ffffff',
+                              border: 'none'
+                            }}
+                          >
+                            {unit.displayName}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                     {call.location && (
                       <div className="text-xs text-gray-600 dark:text-gray-300 mb-2 truncate">
                         {call.location}

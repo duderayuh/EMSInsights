@@ -114,6 +114,15 @@ EMS-Insight is a real-time emergency dispatch monitoring system designed to proc
 
 ```
 Changelog:
+- July 12, 2025: Database Reset for Clean Deployment
+  - **CLEAN SLATE**: Cleared all emergency call data (14,068 calls), incidents (421), hospital conversations (453), and audio segments (14,679)
+  - Reset last processed ID to 0 for fresh start from beginning
+  - Removed all call-unit-tags, unit tags, and related data
+  - Cleaned up all processed audio files from filesystem
+  - System now starts with 0 calls, ready for deployment with fresh data ingestion
+  - All configuration settings, users, and system settings preserved
+  - Emergency transcription system ready to process new calls from scratch
+
 - July 12, 2025: Fixed Audio Re-transcription Issue on Restart
   - **CRITICAL FIX**: Resolved issue where app was re-transcribing all audio from the beginning on every restart
   - Implemented persistent state tracking using `.last-processed-rdio-id` file to remember last processed call ID

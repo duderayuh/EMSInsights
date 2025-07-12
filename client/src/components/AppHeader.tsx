@@ -105,16 +105,6 @@ export function AppHeader({ stats, connectionStatus, systemHealth }: AppHeaderPr
                 {currentTime.toLocaleTimeString()}
               </span>
             </div>
-            <div className="flex items-center space-x-1">
-              <Phone className="h-4 w-4" />
-              <span>{stats.totalCalls.toLocaleString()}</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <AlertTriangle className="h-4 w-4 text-orange-400" />
-              <Badge variant="outline" className="text-orange-400 border-orange-400">
-                {stats.activeCalls}
-              </Badge>
-            </div>
           </div>
           
 

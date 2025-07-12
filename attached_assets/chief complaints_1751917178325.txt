@@ -1,0 +1,47 @@
+Abdominal Pain
+Abdominal Pain B
+Abdominal/Back Pain
+Abdominal/Back Pain B
+Allergic Reaction
+Allergic Reaction B
+Assist Person
+Assist Person B
+Assist Person C
+Bleeding
+Bleeding Non-Traumatic
+Bleeding Non-Traumatic B
+Cardiac Arrest
+Chest Pain/Heart
+Diabetic
+Diabetic B
+Difficulty Breathing
+Environmental
+Gunshot
+Gunshot Wound
+Headache
+Injured Person
+Injured Person B
+Injured Person C
+Mental/Emotional
+Mental/Emotional B
+Mental-Emotional
+Mental-Emotional B
+OB/Childbirth
+OB/Childbirth B
+Overdose
+Overdose B
+Overdose C
+Pediatric Cardiac Arrest
+Seizure
+Seizure B
+Sick Person
+Sick Person A
+Sick Person B
+Sick Person C
+Stroke/CVA
+Unconscious Person
+Unconscious Person B
+Vehicle Accident
+Vehicle Accident B
+Vehicle Accident C
+Mass Casualty

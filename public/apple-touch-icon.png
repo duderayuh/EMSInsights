@@ -1,0 +1,9 @@
+<svg width="192" height="192" viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" rx="32" fill="#3b82f6"/>
+  <g fill="white">
+    <rect x="76" y="48" width="40" height="96" rx="4"/>
+    <rect x="48" y="76" width="96" height="40" rx="4"/>
+    <path d="M24 144h24l8-16 8 32 8-48 8 24 8-8h96" stroke="white" stroke-width="3" fill="none"/>
+  </g>
+  <text x="96" y="170" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="16" font-weight="bold">EMS</text>
+</svg>

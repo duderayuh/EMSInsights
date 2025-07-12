@@ -1,0 +1,633 @@
+queryClient.ts:32  GET https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/api/rdio-scanner/status 502 (Bad Gateway)
+(anonymous) @ queryClient.ts:32
+fetchFn @ @tanstack_react-query.js?v=58e96040:840
+run @ @tanstack_react-query.js?v=58e96040:494
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+onSubscribe @ @tanstack_react-query.js?v=58e96040:1898
+subscribe @ @tanstack_react-query.js?v=58e96040:24
+(anonymous) @ @tanstack_react-query.js?v=58e96040:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=58e96040:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=58e96040:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=58e96040:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=58e96040:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=58e96040:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=58e96040:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=58e96040:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=58e96040:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=58e96040:19416
+commitRoot @ chunk-RPCDYKBN.js?v=58e96040:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=58e96040:9119
+(anonymous) @ chunk-RPCDYKBN.js?v=58e96040:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=58e96040:555
+flush @ @tanstack_react-query.js?v=58e96040:569
+batch @ @tanstack_react-query.js?v=58e96040:587
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+onSubscribe @ @tanstack_react-query.js?v=58e96040:1898
+subscribe @ @tanstack_react-query.js?v=58e96040:24
+(anonymous) @ @tanstack_react-query.js?v=58e96040:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=58e96040:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=58e96040:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=58e96040:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=58e96040:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=58e96040:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=58e96040:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=58e96040:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=58e96040:19447
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18868
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=58e96040:9119
+commitRootImpl @ chunk-RPCDYKBN.js?v=58e96040:19432
+commitRoot @ chunk-RPCDYKBN.js?v=58e96040:19277
+finishConcurrentRender @ chunk-RPCDYKBN.js?v=58e96040:18805
+performConcurrentWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18718
+workLoop @ chunk-RPCDYKBN.js?v=58e96040:197
+flushWork @ chunk-RPCDYKBN.js?v=58e96040:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=58e96040:384Understand this error
+queryClient.ts:32  GET https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/api/alerts/unread 502 (Bad Gateway)
+(anonymous) @ queryClient.ts:32
+fetchFn @ @tanstack_react-query.js?v=58e96040:840
+run @ @tanstack_react-query.js?v=58e96040:494
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+onSubscribe @ @tanstack_react-query.js?v=58e96040:1898
+subscribe @ @tanstack_react-query.js?v=58e96040:24
+(anonymous) @ @tanstack_react-query.js?v=58e96040:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=58e96040:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=58e96040:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=58e96040:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=58e96040:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=58e96040:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=58e96040:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=58e96040:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=58e96040:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=58e96040:19416
+commitRoot @ chunk-RPCDYKBN.js?v=58e96040:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=58e96040:9119
+(anonymous) @ chunk-RPCDYKBN.js?v=58e96040:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=58e96040:555
+flush @ @tanstack_react-query.js?v=58e96040:569
+batch @ @tanstack_react-query.js?v=58e96040:587
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+onSubscribe @ @tanstack_react-query.js?v=58e96040:1898
+subscribe @ @tanstack_react-query.js?v=58e96040:24
+(anonymous) @ @tanstack_react-query.js?v=58e96040:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=58e96040:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=58e96040:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=58e96040:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=58e96040:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=58e96040:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=58e96040:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=58e96040:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=58e96040:19447
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18868
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=58e96040:9119
+commitRootImpl @ chunk-RPCDYKBN.js?v=58e96040:19432
+commitRoot @ chunk-RPCDYKBN.js?v=58e96040:19277
+finishConcurrentRender @ chunk-RPCDYKBN.js?v=58e96040:18805
+performConcurrentWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18718
+workLoop @ chunk-RPCDYKBN.js?v=58e96040:197
+flushWork @ chunk-RPCDYKBN.js?v=58e96040:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=58e96040:384Understand this error
+queryClient.ts:32  GET https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/api/calls/active 502 (Bad Gateway)
+(anonymous) @ queryClient.ts:32
+fetchFn @ @tanstack_react-query.js?v=58e96040:840
+run @ @tanstack_react-query.js?v=58e96040:494
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+onSubscribe @ @tanstack_react-query.js?v=58e96040:1898
+subscribe @ @tanstack_react-query.js?v=58e96040:24
+(anonymous) @ @tanstack_react-query.js?v=58e96040:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=58e96040:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=58e96040:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=58e96040:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=58e96040:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=58e96040:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=58e96040:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=58e96040:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=58e96040:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=58e96040:19416
+commitRoot @ chunk-RPCDYKBN.js?v=58e96040:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=58e96040:9119
+(anonymous) @ chunk-RPCDYKBN.js?v=58e96040:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=58e96040:555
+flush @ @tanstack_react-query.js?v=58e96040:569
+batch @ @tanstack_react-query.js?v=58e96040:587
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+onSubscribe @ @tanstack_react-query.js?v=58e96040:1898
+subscribe @ @tanstack_react-query.js?v=58e96040:24
+(anonymous) @ @tanstack_react-query.js?v=58e96040:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=58e96040:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=58e96040:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=58e96040:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=58e96040:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=58e96040:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=58e96040:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=58e96040:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=58e96040:19447
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18868
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=58e96040:9119
+commitRootImpl @ chunk-RPCDYKBN.js?v=58e96040:19432
+commitRoot @ chunk-RPCDYKBN.js?v=58e96040:19277
+finishConcurrentRender @ chunk-RPCDYKBN.js?v=58e96040:18805
+performConcurrentWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18718
+workLoop @ chunk-RPCDYKBN.js?v=58e96040:197
+flushWork @ chunk-RPCDYKBN.js?v=58e96040:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=58e96040:384Understand this error
+queryClient.ts:32  GET https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/api/calls 502 (Bad Gateway)
+(anonymous) @ queryClient.ts:32
+fetchFn @ @tanstack_react-query.js?v=58e96040:840
+run @ @tanstack_react-query.js?v=58e96040:494
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+(anonymous) @ @tanstack_react-query.js?v=58e96040:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=58e96040:2243
+updateTimers_fn @ @tanstack_react-query.js?v=58e96040:2250
+onQueryUpdate @ @tanstack_react-query.js?v=58e96040:2206
+(anonymous) @ @tanstack_react-query.js?v=58e96040:998
+(anonymous) @ @tanstack_react-query.js?v=58e96040:997
+batch @ @tanstack_react-query.js?v=58e96040:583
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+onSubscribe @ @tanstack_react-query.js?v=58e96040:1898
+subscribe @ @tanstack_react-query.js?v=58e96040:24
+(anonymous) @ @tanstack_react-query.js?v=58e96040:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=58e96040:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=58e96040:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=58e96040:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=58e96040:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=58e96040:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=58e96040:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=58e96040:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=58e96040:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=58e96040:19416
+commitRoot @ chunk-RPCDYKBN.js?v=58e96040:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=58e96040:9119
+(anonymous) @ chunk-RPCDYKBN.js?v=58e96040:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=58e96040:555
+flush @ @tanstack_react-query.js?v=58e96040:569
+batch @ @tanstack_react-query.js?v=58e96040:587
+dispatch_fn @ @tanstack_react-query.js?v=58e96040:996
+setData @ @tanstack_react-query.js?v=58e96040:696
+onSuccess @ @tanstack_react-query.js?v=58e96040:897
+resolve @ @tanstack_react-query.js?v=58e96040:456
+Promise.then
+run @ @tanstack_react-query.js?v=58e96040:498
+start @ @tanstack_react-query.js?v=58e96040:536
+fetch @ @tanstack_react-query.js?v=58e96040:926
+executeFetch_fn @ @tanstack_react-query.js?v=58e96040:2211
+onSubscribe @ @tanstack_react-query.js?v=58e96040:1898
+subscribe @ @tanstack_react-query.js?v=58e96040:24
+(anonymous) @ @tanstack_react-query.js?v=58e96040:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=58e96040:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=58e96040:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=58e96040:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=58e96040:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=58e96040:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=58e96040:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=58e96040:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=58e96040:19447
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18868
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=58e96040:9119
+commitRootImpl @ chunk-RPCDYKBN.js?v=58e96040:19432
+commitRoot @ chunk-RPCDYKBN.js?v=58e96040:19277
+finishConcurrentRender @ chunk-RPCDYKBN.js?v=58e96040:18805
+performConcurrentWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18718
+workLoop @ chunk-RPCDYKBN.js?v=58e96040:197
+flushWork @ chunk-RPCDYKBN.js?v=58e96040:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=58e96040:384Understand this error
+queryClient.ts:32  GET https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/api/calls/active 502 (Bad Gateway)

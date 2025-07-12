@@ -1,0 +1,89 @@
+────────────────────────────────────────────────────────────────────────
+PROJECT:  EMS‑Insight – Transcription System Overhaul
+GOAL:     Replace the current patch‑work “whack‑a‑mole” fixes with a
+          single, robust, production‑grade pipeline that delivers
+          accurate verbatim transcripts, eliminates hallucinations from
+          beeps/static, fixes address extraction, and can re‑process all
+          historical calls in the database.
+
+TECH STACK (MUST MATCH EXISTING APP)
+  • Backend:  Node.js 20  +  Express  +  TypeScript
+  • Frontend: React  +  TypeScript  +  Tailwind CSS (shadcn/ui)
+  • DB:       PostgreSQL + pgvector            (⛔  NEVER write to rdio‑scanner.db)
+  • Audio:    SDRTrunk → Rdio Scanner SQLite (read‑only) → FFmpeg
+  • STT:      OpenAI Whisper API   (primary)
+              Local Whisper CLI    (fallback)
+
+CORE REQUIREMENTS
+────────────────────────────────────────────────────────────────────────
+1. 📥 **Audio Pre‑Processing**
+   ─ Detect pure tones/beeps via FFT or a simple energy‑ratio check.
+   ─ Skip Whisper when the chunk is noise‑only; store transcript as
+     `{beeping}` with low confidence instead.
+   ─ Use adaptive VAD (silencedetect or similar) to trim leading/trailing
+     silence and avoid fragmenting addresses.
+
+2. 🗣️ **Whisper Transcription**
+   ─ Use temperature 0, English, and include the EMS dispatch prompt below.
+   ─ For local Whisper fallback set `condition_on_previous_text=false` on
+     the final segment to prevent “ghost” text bleed‑over.
+
+3. 🧹 **Post‑Processing Pipeline (single module)**
+   a. **Hallucination Filter**
+      • Global blacklist regex for phrases like
+        “thank you for watching”, “subscribe”, “www.”, etc.
+      • If transcript is stripped to nothing → mark as non‑emergency.
+   b. **Address Parsing & Normalization**
+      • Use a US address parser (e.g. `parse-address` or `addressit`).
+      • Merge split numbers (“9 0 1 5” → “9015”).
+      • Support intersections (“Main & 5th”) and highways (“US 31 S”).
+      • Return a clean string → “Google Address Validation API”.
+   c. **Unit / Call‑Type Extraction**
+      • Keep existing NLP classifier but feed it the cleaned transcript.
+      • Ensure call types (87+ complaints) and unit tags stay accurate.
+
+4. 🗄️ **Database & API Updates**
+   ─ Add any new flags you need (`isNoise`, `parseErrors`, etc.).
+   ─ Preserve the CRITICAL rule: never modify or delete audio in
+     `rdio-scanner.db`. Only read.
+
+5. 🔁 **Bulk Re‑Processing Tools**
+   a. `scripts/reprocess_all_calls.ts`
+      • Re‑run address parsing, hallucination filter, NLP classification
+        on every call record.
+   b. `scripts/retranscribe_problem_calls.ts`
+      • Re‑transcribe calls that have confidence < 0.30 OR contain
+        `{beeping}` OR “Unknown Call Type”, using the new pipeline.
+   • Provide an admin‑only REST endpoint to trigger these scripts from
+     the existing dashboard.
+
+6. 🧪 **Acceptance Tests**
+   • Unit tests for hallucination filter & address parser.
+   • Sample audio:
+       1. Pure beep → transcript EXACTLY `{beeping}`.
+       2. “72, 12, US 31, south” → cleaned address `7212 US 31 S`.
+   • End‑to‑end test: ingest sample dispatch, verify map pin appears with
+     correct lat/lon and call type is not “Unknown”.
+
+7. 🚦 **Performance**
+   • Maintain ≤10 s end‑to‑end latency on live audio.
+   • ≤1 s dashboard load after your DB query optimizations.
+
+8. 🔐 **Deliverables**
+   • Forkable Replit project with:
+       - `README.md` quick‑start (Docker Compose + Replit run button).
+       - All code + tests + migration scripts.
+       - Updated `.env.example` for new vars (still uses existing keys).
+   • Short CHANGELOG summarising what you replaced vs. legacy code.
+   • Demo GIF or Loom link optional but welcome.
+
+PROMPT TO PASS TO WHISPER (EXACT STRING)
+────────────────────────────────────────────────────────────────────────
+You are an expert at interpreting Indianapolis‑Marion County EMS and hospital radio traffic.  
+1 Identify EMS unit IDs, fire unit IDs, exact incident addresses or intersections.  
+2 Identify the call‑type (e.g. Assault, MVC, Cardiac Arrest, Trash Fire, Sick Person).  
+3 Use 24‑hour time if present.  
+4 If audio contains ONLY electronic tones, beeps, or static, output exactly `{beeping}` and nothing else.  
+5 Never invent text that was not spoken.  
+6 For unclear audio use `[inaudible]`.  
+Return verbatim speech otherwise.

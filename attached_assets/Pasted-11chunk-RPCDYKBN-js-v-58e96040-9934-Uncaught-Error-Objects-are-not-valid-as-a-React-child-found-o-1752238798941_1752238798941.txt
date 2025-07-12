@@ -1,0 +1,120 @@
+11chunk-RPCDYKBN.js?v=58e96040:9934 Uncaught Error: Objects are not valid as a React child (found: object with keys {name, address, lat, lng}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (chunk-RPCDYKBN.js?v=58e96040:9934:17)
+    at createChild (chunk-RPCDYKBN.js?v=58e96040:10110:15)
+    at reconcileChildrenArray (chunk-RPCDYKBN.js?v=58e96040:10282:33)
+    at reconcileChildFibers2 (chunk-RPCDYKBN.js?v=58e96040:10559:24)
+    at reconcileChildren (chunk-RPCDYKBN.js?v=58e96040:14290:37)
+    at updateHostComponent (chunk-RPCDYKBN.js?v=58e96040:14807:11)
+    at beginWork (chunk-RPCDYKBN.js?v=58e96040:15935:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=58e96040:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=58e96040:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=58e96040:3733:39)
+throwOnInvalidObjectType @ chunk-RPCDYKBN.js?v=58e96040:9934
+createChild @ chunk-RPCDYKBN.js?v=58e96040:10110
+reconcileChildrenArray @ chunk-RPCDYKBN.js?v=58e96040:10282
+reconcileChildFibers2 @ chunk-RPCDYKBN.js?v=58e96040:10559
+reconcileChildren @ chunk-RPCDYKBN.js?v=58e96040:14290
+updateHostComponent @ chunk-RPCDYKBN.js?v=58e96040:14807
+beginWork @ chunk-RPCDYKBN.js?v=58e96040:15935
+callCallback2 @ chunk-RPCDYKBN.js?v=58e96040:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=58e96040:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=58e96040:3733
+beginWork$1 @ chunk-RPCDYKBN.js?v=58e96040:19765
+performUnitOfWork @ chunk-RPCDYKBN.js?v=58e96040:19198
+workLoopSync @ chunk-RPCDYKBN.js?v=58e96040:19137
+renderRootSync @ chunk-RPCDYKBN.js?v=58e96040:19116
+performConcurrentWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18678
+workLoop @ chunk-RPCDYKBN.js?v=58e96040:197
+flushWork @ chunk-RPCDYKBN.js?v=58e96040:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=58e96040:384Understand this error
+11chunk-RPCDYKBN.js?v=58e96040:9934 Uncaught Error: Objects are not valid as a React child (found: object with keys {name, address, lat, lng}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (chunk-RPCDYKBN.js?v=58e96040:9934:17)
+    at createChild (chunk-RPCDYKBN.js?v=58e96040:10110:15)
+    at reconcileChildrenArray (chunk-RPCDYKBN.js?v=58e96040:10282:33)
+    at reconcileChildFibers2 (chunk-RPCDYKBN.js?v=58e96040:10559:24)
+    at reconcileChildren (chunk-RPCDYKBN.js?v=58e96040:14290:37)
+    at updateHostComponent (chunk-RPCDYKBN.js?v=58e96040:14807:11)
+    at beginWork (chunk-RPCDYKBN.js?v=58e96040:15935:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=58e96040:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=58e96040:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=58e96040:3733:39)
+throwOnInvalidObjectType @ chunk-RPCDYKBN.js?v=58e96040:9934
+createChild @ chunk-RPCDYKBN.js?v=58e96040:10110
+reconcileChildrenArray @ chunk-RPCDYKBN.js?v=58e96040:10282
+reconcileChildFibers2 @ chunk-RPCDYKBN.js?v=58e96040:10559
+reconcileChildren @ chunk-RPCDYKBN.js?v=58e96040:14290
+updateHostComponent @ chunk-RPCDYKBN.js?v=58e96040:14807
+beginWork @ chunk-RPCDYKBN.js?v=58e96040:15935
+callCallback2 @ chunk-RPCDYKBN.js?v=58e96040:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=58e96040:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=58e96040:3733
+beginWork$1 @ chunk-RPCDYKBN.js?v=58e96040:19765
+performUnitOfWork @ chunk-RPCDYKBN.js?v=58e96040:19198
+workLoopSync @ chunk-RPCDYKBN.js?v=58e96040:19137
+renderRootSync @ chunk-RPCDYKBN.js?v=58e96040:19116
+recoverFromConcurrentError @ chunk-RPCDYKBN.js?v=58e96040:18736
+performConcurrentWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18684
+workLoop @ chunk-RPCDYKBN.js?v=58e96040:197
+flushWork @ chunk-RPCDYKBN.js?v=58e96040:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=58e96040:384Understand this error
+11chunk-RPCDYKBN.js?v=58e96040:14032 The above error occurred in the <p> component:
+
+    at p
+    at div
+    at div
+    at div
+    at div
+    at _c9 (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at div
+    at https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=58e96040:42:13
+    at Presence (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-BOR5ERF5.js?v=58e96040:24:11)
+    at https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=58e96040:173:13
+    at _c5 (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/src/components/ui/tabs.tsx:72:12)
+    at div
+    at https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=58e96040:42:13
+    at Provider (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-54LY3QNH.js?v=58e96040:38:15)
+    at https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=58e96040:51:7
+    at div
+    at AdminPage (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/src/pages/admin.tsx:1878:41)
+    at ProtectedRoute (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/src/App.tsx?v=BuC41KPibdRXqw2gjWriM:36:38)
+    at Route (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=58e96040:323:16)
+    at Switch (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=58e96040:379:17)
+    at Router
+    at Provider (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-54LY3QNH.js?v=58e96040:38:15)
+    at TooltipProvider (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=58e96040:61:5)
+    at V (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=58e96040:44:25)
+    at J (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=58e96040:42:18)
+    at QueryClientProvider (https://af733d7c-507b-4e36-b2da-68786b64d357-00-9eugd9s8crpy.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=58e96040:2805:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+logCapturedError @ chunk-RPCDYKBN.js?v=58e96040:14032
+update.callback @ chunk-RPCDYKBN.js?v=58e96040:14052
+callCallback @ chunk-RPCDYKBN.js?v=58e96040:11248
+commitUpdateQueue @ chunk-RPCDYKBN.js?v=58e96040:11265
+commitLayoutEffectOnFiber @ chunk-RPCDYKBN.js?v=58e96040:17093
+commitLayoutMountEffects_complete @ chunk-RPCDYKBN.js?v=58e96040:17980
+commitLayoutEffects_begin @ chunk-RPCDYKBN.js?v=58e96040:17969
+commitLayoutEffects @ chunk-RPCDYKBN.js?v=58e96040:17920
+commitRootImpl @ chunk-RPCDYKBN.js?v=58e96040:19353
+commitRoot @ chunk-RPCDYKBN.js?v=58e96040:19277
+finishConcurrentRender @ chunk-RPCDYKBN.js?v=58e96040:18760
+performConcurrentWorkOnRoot @ chunk-RPCDYKBN.js?v=58e96040:18718
+workLoop @ chunk-RPCDYKBN.js?v=58e96040:197
+flushWork @ chunk-RPCDYKBN.js?v=58e96040:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=58e96040:384Understand this error
+chunk-RPCDYKBN.js?v=58e96040:9934 Uncaught Error: Objects are not valid as a React child (found: object with keys {name, address, lat, lng}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (chunk-RPCDYKBN.js?v=58e96040:9934:17)
+    at createChild (chunk-RPCDYKBN.js?v=58e96040:10110:15)
+    at reconcileChildrenArray (chunk-RPCDYKBN.js?v=58e96040:10282:33)
+    at reconcileChildFibers2 (chunk-RPCDYKBN.js?v=58e96040:10559:24)
+    at reconcileChildren (chunk-RPCDYKBN.js?v=58e96040:14290:37)
+    at updateHostComponent (chunk-RPCDYKBN.js?v=58e96040:14807:11)
+    at beginWork (chunk-RPCDYKBN.js?v=58e96040:15935:22)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=58e96040:19753:22)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=58e96040:19198:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=58e96040:19137:13)

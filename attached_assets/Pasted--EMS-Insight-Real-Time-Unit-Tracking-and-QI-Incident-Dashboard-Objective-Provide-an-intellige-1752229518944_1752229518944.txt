@@ -1,0 +1,79 @@
+// EMS-Insight: Real-Time Unit Tracking and QI Incident Dashboard
+// Objective: Provide an intelligent, real-time dashboard that tracks EMS/Fire units by linking dispatch, closest hospital, transport status, and QI markers.
+
+/**
+ * DATA FLOW OVERVIEW:
+ * 1. Parse and log initial dispatch call (unit, incident type, location).
+ * 2. Infer closest hospital to incident address using Google Maps API.
+ * 3. Listen for EMS-Hospital call from same unit.
+ * 4. Link dispatch + hospital call as unified "Incident".
+ * 5. Display inferred timeline:
+ *    EMS 91 dispatched → Incident Type → Closest: Methodist → EMS 91 called Methodist → Status: En Route
+ * 6. Estimate transport ETA from scene to hospital using Google Maps Directions API → Compare to EMS-reported ETA.
+ * 7. Enable full editing, transcript review, and QI annotation per Incident.
+ */
+
+/**
+ * DATABASE STRUCTURE (incidents table):
+ * id, unit_id, dispatch_time, location, call_type, inferred_closest_hospital,
+ * actual_hospital_called, transport_start_time, eta_given, eta_estimated,
+ * eta_variance, match_status, distance_km, travel_time_min,
+ * transcript_dispatch_id, transcript_hospital_id,
+ * full_ai_summary TEXT, editable_fields, created_by, last_updated
+ */
+
+/**
+ * BACKEND LOGIC
+ */
+
+// 1. When dispatch call is processed:
+// - Extract unit, location, call type
+// - Use Google Maps Directions API to determine distance + ETA to each hospital
+// - Identify closest hospital (shortest drive time)
+// - Save as new "incident"
+
+// 2. When EMS-hospital call is processed:
+// - Extract hospital name, ETA given
+// - Match to open incident with same unit and within recent timeframe
+// - Update incident: mark as "En Route", save hospital, call ID, eta_given
+// - Recalculate ETA using Google Directions API (scene → actual hospital)
+// - Store all in incident record
+
+// 3. Expose routes:
+// - GET `/api/units/status`: live incident tracking per unit
+// - GET `/api/incidents/:id`: full incident detail
+// - PATCH `/api/incidents/:id`: update editable fields (hospital, unit, address, notes)
+// - DELETE `/api/incidents/:id`: remove incident (admin only)
+// - POST `/api/incidents/:id/summary`: regenerate AI summary
+
+/**
+ * FRONTEND (React + Tailwind)
+ */
+
+// 1. New page/tab: "Unit Tracker"
+// 2. Card/table layout of units:
+//    EMS Unit | Last Incident Type | Closest Hospital | Status | ETA (Given vs Est) | Deviation | View Details
+// 3. Status indicators:
+//    - gray: Dispatched
+//    - blue: En Route to Hospital
+//    - green: Arrived
+
+// 4. Incident Detail Modal/Page:
+//    - Title: Incident #ID (permalink: /incident/:id)
+//    - Linked: Dispatch Transcript + EMS-Hospital Transcript
+//    - Timeline: Dispatch → Called Hospital → ETA → Est Arrival
+//    - Google Maps route overlay: scene → hospital
+//    - Editable fields: location, unit ID, hospital, call type, notes
+//    - QI Controls: mark for review, resolution notes, delete
+//    - AI Summary: generated via OpenAI → stores summary in `full_ai_summary`
+
+/**
+ * SMART FEATURES
+ */
+// - Link calls using unit ID + time window
+// - Closest hospital determined by drive time, not distance
+// - Compare Google-estimated ETA vs EMS-reported ETA
+// - Flag outliers: >5 min ETA variance, wrong specialty hospital
+// - Editable interface with change log for QI teams
+// - One-click link to full incident view for QA reviews
+// - Support historical queries (by date, unit, call type, outcome)

@@ -1,0 +1,5271 @@
+import type { Express } from "express";
+import http, { createServer, type Server } from "http";
+import { writeFileSync, existsSync } from "fs";
+import { join } from "path";
+import multer from "multer";
+import cookieParser from "cookie-parser";
+import { storage } from "./storage";
+import { insertCallSchema, insertAudioSegmentSchema, CallStatus, loginSchema, insertUserSchema, insertHospitalCallSchema, insertHospitalCallSegmentSchema } from "@shared/schema";
+import { audioProcessor } from "./services/audio-processor";
+import { transcriptionService } from "./services/transcription";
+import { nlpClassifier } from "./services/nlp-classifier";
+import { WebSocketService } from "./services/websocket";
+import { rdioScannerClient } from "./services/rdio-scanner-client";
+import { rdioFileMonitor } from "./services/rdio-file-monitor";
+import { rdioDatabaseMonitor } from "./services/rdio-database-monitor";
+import { geocodingService } from "./services/geocoding";
+import { talkgroupMapper } from "./services/talkgroup-mapper";
+import { transcriptCleanupService } from "./services/transcript-cleanup";
+import { streetMatcher } from "./services/street-matcher";
+import { rdioScannerManager } from "./services/rdio-scanner-manager";
+import { callLinkingService } from "./services/call-linking-service";
+import { authService } from "./services/auth-service";
+import { requireAuth, requireAdmin, optionalAuth } from "./middleware/auth-middleware";
+import { conversationAnalyzer } from "./services/conversation-analyzer";
+import { googleAddressValidation } from "./services/address-validation";
+import { weatherService } from "./services/weather-service";
+import { aircraftService } from "./services/aircraft-service";
+import { transcriptionRetryService } from "./services/transcription-retry";
+import { alertManager } from "./services/alert-manager";
+import { HospitalCallStatusMonitor } from "./services/hospital-call-status-monitor";
+import { hospitalCallProcessor } from "./services/hospital-call-processor";
+import { VoiceTypeClassifier } from "./services/voice-type-classifier";
+import { unitExtractor } from "./services/unit-extractor";
+import { transcriptionFixer } from "./scripts/fix-transcriptions";
+import { analyticsRoutes } from "./analytics.routes";
+
+let wsService: WebSocketService;
+
+// Configure multer for audio file uploads
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+});
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  const httpServer = createServer(app);
+  
+  // Add cookie parser middleware FIRST - before all routes
+  app.use(cookieParser());
+  
+  // Rdio Scanner Web Interface Routes
+  app.get(/^\/rdio-scanner$/, (req, res) => {
+    // Redirect /rdio-scanner to /rdio-scanner/ to ensure consistent routing
+    res.redirect('/rdio-scanner/');
+  });
+
+  app.all(/^\/rdio-scanner\/.*/, (req, res) => {
+    const forwardPath = req.url.replace('/rdio-scanner', '');
+    console.log(`Rdio Scanner proxy: ${req.method} ${req.url} -> ${forwardPath}`);
+    
+    // Log request details for debugging
+    if (req.method === 'POST' && req.url.includes('/api/admin/login')) {
+      console.log('Admin login request:', {
+        body: req.body,
+        contentType: req.headers['content-type'],
+        contentLength: req.headers['content-length']
+      });
+    }
+    
+    // Clean up headers and ensure proper forwarding
+    const cleanHeaders = { ...req.headers };
+    delete cleanHeaders['host'];
+    delete cleanHeaders['connection'];
+    delete cleanHeaders['content-length'];
+    
+    const options = {
+      hostname: 'localhost',
+      port: 3001,
+      path: forwardPath,
+      method: req.method,
+      headers: {
+        ...cleanHeaders,
+        host: 'localhost:3001',
+        'x-forwarded-for': req.connection?.remoteAddress || '',
+        'x-forwarded-proto': req.protocol || 'http',
+        'x-real-ip': req.connection?.remoteAddress || ''
+      },
+      timeout: 15000, // 15 second timeout for admin interface
+      agent: false // Don't reuse connections
+    };
+
+    const proxyReq = http.request(options, (proxyRes: any) => {
+      // Check if this is an HTML page that needs base href fixing
+      const isHtmlPage = proxyRes.headers['content-type']?.includes('text/html');
+      
+      if (isHtmlPage) {
+        // For HTML pages, collect the response and fix the base href
+        const chunks: Buffer[] = [];
+        
+        proxyRes.on('data', (chunk: Buffer) => {
+          chunks.push(chunk);
+        });
+        
+        proxyRes.on('end', () => {
+          const body = Buffer.concat(chunks).toString();
+          
+          // Fix the base href to work with the proxy path
+          const fixedBody = body.replace(
+            '<base href="./">',
+            '<base href="/rdio-scanner/">'
+          );
+          
+          // Set headers and handle cookies properly
+          Object.keys(proxyRes.headers).forEach(key => {
+            if (key.toLowerCase() !== 'content-length') {
+              let value = proxyRes.headers[key];
+              // Rewrite Set-Cookie domain for proxy compatibility
+              if (key.toLowerCase() === 'set-cookie' && Array.isArray(value)) {
+                value = value.map(cookie => 
+                  cookie.replace(/Domain=localhost:3001/gi, '')
+                        .replace(/Domain=localhost/gi, '')
+                        .replace(/Secure;/gi, '') // Remove Secure flag for development
+                );
+              }
+              res.setHeader(key, value);
+            }
+          });
+          res.statusCode = proxyRes.statusCode;
+          res.setHeader('Content-Length', Buffer.byteLength(fixedBody));
+          res.end(fixedBody);
+        });
+        
+        proxyRes.on('error', (err: any) => {
+          console.error('Rdio Scanner proxy response error:', err);
+          if (!res.headersSent) {
+            res.status(502).json({ error: 'Rdio Scanner service unavailable' });
+          }
+        });
+      } else {
+        // For all other responses, just proxy normally with cookie handling
+        Object.keys(proxyRes.headers).forEach(key => {
+          let value = proxyRes.headers[key];
+          // Rewrite Set-Cookie domain for proxy compatibility
+          if (key.toLowerCase() === 'set-cookie' && Array.isArray(value)) {
+            value = value.map(cookie => 
+              cookie.replace(/Domain=localhost:3001/gi, '')
+                    .replace(/Domain=localhost/gi, '')
+                    .replace(/Secure;/gi, '') // Remove Secure flag for development
+            );
+          }
+          res.setHeader(key, value);
+        });
+        res.statusCode = proxyRes.statusCode;
+        
+        // Log error responses for debugging
+        if (proxyRes.statusCode >= 400 && req.url.includes('/api/admin/login')) {
+          console.error(`Admin login failed with status ${proxyRes.statusCode}`);
+          let errorBody = '';
+          proxyRes.on('data', (chunk: Buffer) => {
+            errorBody += chunk.toString();
+          });
+          proxyRes.on('end', () => {
+            console.error('Admin login error response:', errorBody);
+          });
+        }
+        
+        proxyRes.pipe(res, { end: true });
+      }
+    });
+
+    proxyReq.on('error', (err: any) => {
+      console.error('Rdio Scanner proxy request error:', err);
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Rdio Scanner service unavailable', details: err.message });
+      }
+    });
+
+    proxyReq.on('timeout', () => {
+      console.error('Rdio Scanner proxy request timeout');
+      proxyReq.destroy();
+      if (!res.headersSent) {
+        res.status(504).json({ error: 'Rdio Scanner request timeout' });
+      }
+    });
+
+    // Handle request body for POST/PUT requests
+    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+      req.on('error', (err) => {
+        console.error('Request stream error:', err);
+        proxyReq.destroy();
+      });
+      req.pipe(proxyReq);
+    } else {
+      proxyReq.end();
+    }
+  });
+
+  
+  // Initialize WebSocket service with error handling
+  try {
+    wsService = new WebSocketService(httpServer);
+    console.log('WebSocket service initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize WebSocket service:', error);
+    // Create a stub WebSocket service to prevent crashes
+    wsService = {
+      broadcastNewCall: () => {},
+      broadcastCallUpdate: () => {},
+      broadcastStatsUpdate: () => {},
+      broadcastSystemHealth: () => {},
+      broadcastAlert: () => {},
+      broadcastAlertUpdate: () => {},
+      broadcastIncidentCreated: () => {},
+      broadcastIncidentUpdated: () => {},
+      getConnectionCount: () => 0,
+      close: () => {}
+    } as any;
+  }
+
+  // Initialize audio processing pipeline
+  initializeAudioPipeline();
+
+  // Authentication routes (no auth required)
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const credentials = loginSchema.parse(req.body);
+      const user = await authService.verifyUser(credentials);
+      
+      if (!user) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      const session = await authService.createSession(user.id);
+      
+      // Set HTTP-only session cookie
+      res.cookie('sessionId', session.id, {
+        httpOnly: true,
+        secure: false, // Allow cookies over HTTP in development
+        sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        path: '/' // Explicitly set path
+      });
+
+      res.json({ 
+        success: true, 
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role
+        }
+      });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(400).json({ error: "Invalid request" });
+    }
+  });
+
+  app.post("/api/auth/logout", requireAuth, async (req, res) => {
+    try {
+      const sessionId = req.cookies?.sessionId;
+      if (sessionId) {
+        await authService.deleteSession(sessionId);
+      }
+      res.clearCookie('sessionId');
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Logout error:', error);
+      res.status(500).json({ error: "Logout failed" });
+    }
+  });
+
+  app.get("/api/auth/me", requireAuth, async (req, res) => {
+    res.json({
+      id: req.user!.id,
+      username: req.user!.username,
+      email: req.user!.email,
+      firstName: req.user!.firstName,
+      lastName: req.user!.lastName,
+      role: req.user!.role
+    });
+  });
+
+  app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'Current password and new password are required' });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'New password must be at least 6 characters' });
+      }
+
+      const success = await authService.changePassword(req.user!.id, currentPassword, newPassword);
+      
+      if (!success) {
+        return res.status(400).json({ error: 'Current password is incorrect' });
+      }
+
+      res.json({ message: 'Password changed successfully' });
+    } catch (error) {
+      console.error('Error changing password:', error);
+      res.status(500).json({ error: 'Failed to change password' });
+    }
+  });
+
+  // User management routes (admin only)
+  app.get("/api/users", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const users = await authService.getAllUsers();
+      res.json(users.map(user => ({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        isActive: user.isActive,
+        lastLogin: user.lastLogin,
+        createdAt: user.createdAt
+      })));
+    } catch (error) {
+      console.error('Get users error:', error);
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  app.post("/api/users", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userData = insertUserSchema.parse(req.body);
+      const user = await authService.createUser(userData);
+      res.json({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        isActive: user.isActive,
+        createdAt: user.createdAt
+      });
+    } catch (error) {
+      console.error('Create user error:', error);
+      res.status(400).json({ error: "Failed to create user" });
+    }
+  });
+
+  app.put("/api/users/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const updates = req.body;
+      const user = await authService.updateUser(userId, updates);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        isActive: user.isActive,
+        createdAt: user.createdAt
+      });
+    } catch (error) {
+      console.error('Update user error:', error);
+      res.status(400).json({ error: "Failed to update user" });
+    }
+  });
+
+  app.delete("/api/users/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const deleted = await authService.deleteUser(userId);
+      if (!deleted) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete user error:', error);
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
+  // API Routes (public health check)
+  app.get("/api/health", async (req, res) => {
+    const health = await storage.getSystemHealth();
+    const audioStatus = audioProcessor.getStatus();
+    const transcriptionStatus = transcriptionService.getStatus();
+    const nlpStats = nlpClassifier.getKeywordStats();
+    
+    res.json({
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      services: {
+        audio: audioStatus,
+        transcription: transcriptionStatus,
+        nlp: nlpStats,
+        websocket: {
+          connections: wsService.getConnectionCount()
+        }
+      },
+      components: health
+    });
+  });
+
+  // Emergency dashboard routes (authentication required)
+  app.get("/api/calls", requireAuth, async (req, res) => {
+    try {
+      const {
+        limit = "500", // Increased from 20 to 500
+        callType,
+        status,
+        dateFrom,
+        dateTo,
+        query,
+        includeLowConfidence = "false" // Admin can bypass filtering
+      } = req.query;
+
+      const searchParams = {
+        query: query as string,
+        callType: callType as string,
+        dateFrom: dateFrom ? new Date(dateFrom as string) : undefined,
+        dateTo: dateTo ? new Date(dateTo as string) : undefined,
+        limit: parseInt(limit as string)
+      };
+
+      let calls = await storage.searchCalls(searchParams);
+      
+      // Apply front-page filtering unless explicitly disabled or user is admin
+      const isAdmin = (req as any).user?.role === 'admin';
+      const shouldFilter = includeLowConfidence !== "true" && !isAdmin;
+      
+      let filteredCount = 0;
+      
+      if (shouldFilter) {
+        calls = calls.filter(call => {
+          // Skip filtering if transcription is still pending
+          if (!call.transcript || call.transcript === "Transcription pending...") {
+            return true;
+          }
+          
+          // Filter out low confidence transcriptions (<30% instead of 50%)
+          if (call.confidence !== null && call.confidence < 0.3) {
+            filteredCount++;
+            return false;
+          }
+          
+          // Filter out Non-Emergency Content calls regardless of confidence
+          if (call.callType === 'Non-Emergency Content') {
+            filteredCount++;
+            return false;
+          }
+          
+          // Only filter out calls with obviously non-emergency content (beeping, etc.)
+          // but allow most legitimate emergency calls through
+          if (call.transcript && (
+            call.transcript.includes('{beeping}') ||
+            call.transcript.includes('Thank you for watching') ||
+            call.transcript.toLowerCase().includes('test') ||
+            call.transcript.length < 10
+          )) {
+            filteredCount++;
+            return false;
+          }
+          
+          // Filter out calls with no transcription or unable to transcribe messages
+          if (call.transcript === "[No transcription available]" || 
+              call.transcript === "[Unable to transcribe audio]") {
+            filteredCount++;
+            return false;
+          }
+          
+          return true;
+        });
+      }
+      
+
+      
+      // Fetch unit tags for all calls in bulk using optimized batch query
+      const callIds = calls.map(call => call.id);
+      const unitTagsMap = await storage.getBatchCallUnits(callIds);
+      
+      // Enhance calls with talkgroup descriptions, voice type, and unit tags
+      const enhancedCalls = calls.map(call => ({
+        ...call,
+        talkgroupDescription: call.talkgroup ? talkgroupMapper.getDescription(call.talkgroup) : null,
+        talkgroupDisplayName: call.talkgroup ? talkgroupMapper.getDisplayName(call.talkgroup) : null,
+        voiceTypeDescription: call.voiceType ? VoiceTypeClassifier.getVoiceTypeDescription(call.voiceType) : null,
+        units: unitTagsMap[call.id] || []
+      }));
+      
+      // Add cache-busting headers to force fresh data
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+      
+      res.json(enhancedCalls);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch calls" });
+    }
+  });
+
+  app.get("/api/calls/active", requireAuth, async (req, res) => {
+    try {
+      let activeCalls = await storage.getActiveCalls();
+      
+      // Apply the same filtering as the main calls endpoint
+      const isAdmin = (req as any).user?.role === 'admin';
+      const shouldFilter = !isAdmin;
+      
+      if (shouldFilter) {
+        activeCalls = activeCalls.filter(call => {
+          // Skip filtering if transcription is still pending
+          if (!call.transcript || call.transcript === "Transcription pending...") {
+            return true;
+          }
+          
+          // Filter out low confidence transcriptions
+          if (call.confidence !== null && call.confidence < 0.3) {
+            return false;
+          }
+          
+          // Filter out Non-Emergency Content calls regardless of confidence
+          if (call.callType === 'Non-Emergency Content') {
+            return false;
+          }
+          
+          // Only filter out calls with obviously non-emergency content (beeping, etc.)
+          // but allow most legitimate emergency calls through
+          if (call.transcript && (
+            call.transcript.includes('{beeping}') ||
+            call.transcript.includes('Thank you for watching') ||
+            call.transcript.toLowerCase().includes('test') ||
+            call.transcript.length < 10
+          )) {
+            return false;
+          }
+          
+          // Filter out calls with no transcription or unable to transcribe messages
+          if (call.transcript === "[No transcription available]" || 
+              call.transcript === "[Unable to transcribe audio]") {
+            return false;
+          }
+          
+          return true;
+        });
+      }
+      
+      // Don't fetch unit tags for all calls - let frontend fetch them on demand
+      // This was causing extreme slowness with many calls
+      
+      // Enhance calls with talkgroup descriptions and voice type
+      const enhancedCalls = activeCalls.map(call => ({
+        ...call,
+        talkgroupDescription: call.talkgroup ? talkgroupMapper.getDescription(call.talkgroup) : null,
+        talkgroupDisplayName: call.talkgroup ? talkgroupMapper.getDisplayName(call.talkgroup) : null,
+        voiceTypeDescription: call.voiceType ? VoiceTypeClassifier.getVoiceTypeDescription(call.voiceType) : null,
+        units: [] // Empty for now, fetch on demand if needed
+      }));
+      
+      res.json(enhancedCalls);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch active calls" });
+    }
+  });
+
+  // Get Google Maps API key for frontend
+  app.get("/api/config/google-maps-key", async (req, res) => {
+    try {
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "Google Maps API key not configured" });
+      }
+      res.json({ apiKey });
+    } catch (error) {
+      console.error('Error fetching Google Maps API key:', error);
+      res.status(500).json({ error: "Failed to fetch Google Maps API key" });
+    }
+  });
+
+
+
+  app.get("/api/calls/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const call = await storage.getCall(id);
+      
+      if (!call) {
+        return res.status(404).json({ error: "Call not found" });
+      }
+      
+      // Get unit tags for this call
+      const units = await storage.getCallUnits(id);
+      
+      // Enhance call with talkgroup descriptions, voice type, and unit tags
+      const enhancedCall = {
+        ...call,
+        talkgroupDescription: call.talkgroup ? talkgroupMapper.getDescription(call.talkgroup) : null,
+        talkgroupDisplayName: call.talkgroup ? talkgroupMapper.getDisplayName(call.talkgroup) : null,
+        voiceTypeDescription: call.voiceType ? VoiceTypeClassifier.getVoiceTypeDescription(call.voiceType) : null,
+        units: units || []
+      };
+      
+      res.json(enhancedCall);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch call" });
+    }
+  });
+
+  // Search calls endpoint - searches entire database
+  app.get("/api/calls/search", requireAuth, async (req, res) => {
+    try {
+      const {
+        q: query,
+        callType,
+        dateFrom,
+        dateTo,
+        limit = "50"
+      } = req.query;
+
+      const searchParams = {
+        query: query as string,
+        callType: callType as string,
+        dateFrom: dateFrom ? new Date(dateFrom as string) : undefined,
+        dateTo: dateTo ? new Date(dateTo as string) : undefined,
+        limit: parseInt(limit as string)
+      };
+
+      const searchResults = await storage.searchCalls(searchParams);
+      
+      // Enhance results with talkgroup descriptions
+      const enhancedResults = searchResults.map(call => ({
+        ...call,
+        talkgroupDescription: call.talkgroup ? talkgroupMapper.getDescription(call.talkgroup) : null,
+        talkgroupDisplayName: call.talkgroup ? talkgroupMapper.getDisplayName(call.talkgroup) : null
+      }));
+      
+      res.json(enhancedResults);
+    } catch (error) {
+      console.error("Search error:", error);
+      res.status(500).json({ error: "Failed to search calls", details: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.patch("/api/calls/:id/status", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status } = req.body;
+      
+      if (!Object.values(CallStatus).includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
+      
+      const call = await storage.updateCallStatus(id, status);
+      if (!call) {
+        return res.status(404).json({ error: "Call not found" });
+      }
+      
+      // Broadcast update
+      if (wsService) {
+        wsService.broadcastCallUpdate(call);
+      }
+      
+      res.json(call);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update call status" });
+    }
+  });
+
+  // Delete call endpoint (admin only)
+  app.delete("/api/calls/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const call = await storage.getCall(id);
+      if (!call) {
+        return res.status(404).json({ error: "Call not found" });
+      }
+      
+      // Actually delete the call from storage
+      const deleted = await storage.deleteCall(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Call not found" });
+      }
+      
+      // Broadcast deletion notification (simplified - just call ID)
+      // Note: Frontend will handle removal via cache invalidation
+      
+      res.json({ success: true, message: "Call deleted successfully" });
+    } catch (error) {
+      console.error('Error deleting call:', error);
+      res.status(500).json({ error: "Failed to delete call" });
+    }
+  });
+
+  // Update call endpoint (admin only)
+  app.patch("/api/calls/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      
+      const updatedCall = await storage.updateCall(id, updates);
+      if (!updatedCall) {
+        return res.status(404).json({ error: "Call not found" });
+      }
+      
+      // If location was updated, automatically geocode the new address
+      if (updates.location && updates.location !== updatedCall.location) {
+        try {
+          console.log(`Location updated for call ${id}: ${updates.location}`);
+          
+          // Use the existing geocoding service directly
+          const geocodeResult = await geocodingService.geocodeAddress(updates.location);
+          
+          if (geocodeResult && geocodeResult.latitude && geocodeResult.longitude) {
+            console.log(`Geocoded location: ${geocodeResult.latitude}, ${geocodeResult.longitude}`);
+            
+            // Update the call with new coordinates
+            const geocodedCall = await storage.updateCall(id, {
+              latitude: geocodeResult.latitude,
+              longitude: geocodeResult.longitude
+            });
+            
+            if (geocodedCall) {
+              console.log(`Call ${id} updated with geocoded coordinates`);
+              // Broadcast the geocoded update
+              wsService.broadcastCallUpdate(geocodedCall);
+              return res.json(geocodedCall);
+            }
+          } else {
+            console.log(`Failed to geocode location: ${updates.location}`);
+          }
+        } catch (geocodeError) {
+          console.error('Geocoding error during location update:', geocodeError);
+          // Continue with original update even if geocoding fails
+        }
+      }
+      
+      // Broadcast update
+      wsService.broadcastCallUpdate(updatedCall);
+      
+      res.json(updatedCall);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update call" });
+    }
+  });
+
+  // Fix address endpoint (admin only)
+  app.post("/api/calls/:id/fix-address", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Get the current call
+      const call = await storage.getCall(id);
+      if (!call) {
+        return res.status(404).json({ error: "Call not found" });
+      }
+      
+      if (!call.location) {
+        return res.status(400).json({ error: "No location to fix" });
+      }
+      
+      // Use the geocoding service to re-geocode the address
+      const geocodeResult = await geocodingService.geocodeAddress(call.location);
+      
+      if (geocodeResult && geocodeResult.latitude && geocodeResult.longitude) {
+        // Update the call with new coordinates
+        const updatedCall = await storage.updateCall(id, {
+          latitude: geocodeResult.latitude,
+          longitude: geocodeResult.longitude
+        });
+        
+        if (updatedCall) {
+          // Broadcast the update
+          wsService.broadcastCallUpdate(updatedCall);
+          return res.json(updatedCall);
+        }
+      }
+      
+      return res.status(400).json({ error: "Failed to geocode address" });
+    } catch (error) {
+      console.error('Address fix error:', error);
+      res.status(500).json({ error: "Failed to fix address" });
+    }
+  });
+
+  app.get("/api/stats", requireAuth, async (req, res) => {
+    try {
+      const stats = await storage.getCurrentStats();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
+
+  app.get("/api/stats/trends", requireAuth, async (req, res) => {
+    try {
+      const { days = "7" } = req.query;
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - parseInt(days as string));
+      
+      const trends = await storage.getStatsForPeriod(startDate, endDate);
+      res.json(trends);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch trends" });
+    }
+  });
+
+  // Register analytics routes
+  app.use("/api/analytics", analyticsRoutes);
+
+  app.post("/api/audio/ingest", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const segmentData = insertAudioSegmentSchema.parse(req.body);
+      const segment = await storage.createAudioSegment(segmentData);
+      res.json(segment);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid audio segment data" });
+    }
+  });
+
+  app.post("/api/calls/create", async (req, res) => {
+    try {
+      const callData = insertCallSchema.parse(req.body);
+      const call = await storage.createCall(callData);
+      
+      // Geocode the call location if available
+      if (call.location) {
+        try {
+          const geocoded = await geocodingService.geocodeAndUpdateCall(call.id);
+          if (geocoded) {
+            // Get the updated call with coordinates
+            const updatedCall = await storage.getCall(call.id);
+            if (updatedCall) {
+              // Broadcast updated call with coordinates
+              if (wsService) {
+                wsService.broadcastCallUpdate(updatedCall);
+              }
+              res.json(updatedCall);
+              return;
+            }
+          }
+        } catch (error) {
+          console.error(`Error geocoding call ${call.id}:`, error);
+        }
+      }
+      
+      // Broadcast new call
+      if (wsService) {
+        wsService.broadcastNewCall(call);
+      }
+      
+      res.json(call);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid call data" });
+    }
+  });
+
+
+
+  // Manual geocoding endpoint for existing calls
+  app.post("/api/calls/:id/geocode", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const call = await storage.getCall(id);
+      
+      if (!call) {
+        return res.status(404).json({ error: "Call not found" });
+      }
+      
+      if (!call.location) {
+        return res.status(400).json({ error: "Call has no location to geocode" });
+      }
+      
+      const geocoded = await geocodingService.geocodeAndUpdateCall(id);
+      if (geocoded) {
+        const updatedCall = await storage.getCall(id);
+        if (updatedCall) {
+          if (wsService) {
+            wsService.broadcastCallUpdate(updatedCall);
+          }
+          res.json(updatedCall);
+        } else {
+          res.status(500).json({ error: "Failed to retrieve updated call" });
+        }
+      } else {
+        res.status(400).json({ error: "Failed to geocode address" });
+      }
+    } catch (error) {
+      console.error("Geocoding error:", error);
+      res.status(500).json({ error: "Failed to geocode call" });
+    }
+  });
+
+  // Reprocess call endpoint to reclassify with updated NLP
+  app.post("/api/calls/:id/reprocess", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const call = await storage.getCall(id);
+      
+      if (!call) {
+        return res.status(404).json({ error: "Call not found" });
+      }
+      
+      if (!call.transcript) {
+        return res.status(400).json({ error: "Call has no transcript to reprocess" });
+      }
+
+      // Reclassify the call using current NLP classifier
+      const classification = await nlpClassifier.classify(call.transcript);
+      console.log(`Reprocess Debug - Call ID: ${id}, New call type: "${classification.callType}"`);
+      
+      // Update the call with new classification
+      const updatedCall = await storage.updateCall(id, {
+        callType: classification.callType,
+        keywords: classification.keywords,
+        urgencyScore: classification.urgencyScore
+      });
+      
+      console.log(`Reprocess Debug - Updated call type: "${updatedCall?.callType}"`);
+      
+      
+      if (updatedCall) {
+        if (wsService) {
+          wsService.broadcastCallUpdate(updatedCall);
+        }
+        res.json(updatedCall);
+      } else {
+        res.status(500).json({ error: "Failed to update call" });
+      }
+    } catch (error) {
+      console.error("Reprocessing error:", error);
+      res.status(500).json({ error: "Failed to reprocess call" });
+    }
+  });
+
+  // Re-transcribe call endpoint - force re-transcription through Whisper
+  app.post("/api/calls/:id/retranscribe", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const call = await storage.getCall(id);
+      
+      if (!call) {
+        return res.status(404).json({ error: "Call not found" });
+      }
+      
+      if (!call.audioSegmentId) {
+        return res.status(400).json({ error: "Call has no audio segment to re-transcribe" });
+      }
+
+      // Get the audio segment
+      const audioSegment = await storage.getAudioSegment(call.audioSegmentId);
+      if (!audioSegment) {
+        return res.status(404).json({ error: "Audio segment not found" });
+      }
+
+      console.log(`Starting re-transcription for call ${id} with audio segment ${call.audioSegmentId}`);
+
+      // Get audio from Rdio Scanner database instead of local files
+      const metadata = call.metadata as any;
+      const rdioCallId = metadata?.rdioCallId;
+      
+      if (!rdioCallId) {
+        return res.status(404).json({ error: "No Rdio Scanner call ID found in call metadata" });
+      }
+
+      // Access the Rdio Scanner database directly to get audio
+      const Database = await import('better-sqlite3');
+      const path = await import('path');
+      
+      const rdioDbPath = path.join(process.cwd(), 'rdio-scanner-server/rdio-scanner.db');
+      const db = new Database.default(rdioDbPath, { readonly: true });
+      
+      let audioBuffer: Buffer;
+      try {
+        // Query for the audio data directly from the database
+        const stmt = db.prepare('SELECT audio FROM rdioScannerCalls WHERE id = ?');
+        const result = stmt.get(rdioCallId) as { audio: Buffer } | undefined;
+        
+        if (!result || !result.audio) {
+          db.close();
+          return res.status(404).json({ 
+            error: "Audio not found in Rdio Scanner database",
+            details: `Rdio call ID ${rdioCallId} not found - audio may have been rotated out`
+          });
+        }
+        
+        audioBuffer = result.audio;
+        db.close();
+      } catch (dbError) {
+        if (db) db.close();
+        console.error('Error querying Rdio Scanner database:', dbError);
+        return res.status(500).json({ error: "Failed to query Rdio Scanner database" });
+      }
+
+      // Force re-transcription through Whisper using the audio buffer
+      const transcriptionResult = await transcriptionService.transcribeAudioBuffer(audioBuffer, call.audioSegmentId);
+      
+      if (!transcriptionResult) {
+        return res.status(500).json({ error: "Re-transcription failed" });
+      }
+
+      // Use the cleaned transcript if available, otherwise use the raw transcript
+      const newTranscript = transcriptionResult.cleanedTranscript || transcriptionResult.utterance;
+      
+      // Reclassify the call with the new transcript
+      const classification = await nlpClassifier.classify(newTranscript);
+      console.log(`Retranscribe Debug - Call ID: ${id}, New classification: "${classification.callType}"`);
+      
+      // Update the call with new transcription and classification
+      const updateData = {
+        transcript: newTranscript,
+        confidence: transcriptionResult.confidence,
+        callType: classification.callType,
+        location: classification.location,
+        keywords: classification.keywords,
+        urgencyScore: classification.urgencyScore,
+        embedding: classification.metadata.embedding
+      };
+      
+      console.log(`Retranscribe Debug - About to update call ${id} with:`, JSON.stringify(updateData, null, 2));
+      
+      const updatedCall = await storage.updateCall(id, updateData);
+      
+      console.log(`Retranscribe Debug - Updated call type in DB: "${updatedCall?.callType}"`);
+      console.log(`Re-transcription completed for call ${id}. New transcript: "${newTranscript}"`);
+      
+      if (updatedCall) {
+        // Broadcast the updated call
+        wsService.broadcastCallUpdate(updatedCall);
+        res.json({
+          ...updatedCall,
+          message: "Call re-transcribed successfully"
+        });
+      } else {
+        res.status(500).json({ error: "Failed to update call after re-transcription" });
+      }
+    } catch (error) {
+      console.error('Error re-transcribing call:', error);
+      res.status(500).json({ error: "Failed to re-transcribe call" });
+    }
+  });
+
+  // Address analysis endpoint for debugging extraction issues
+  app.post("/api/calls/:id/analyze-address", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const call = await storage.getCall(id);
+      
+      if (!call) {
+        return res.status(404).json({ error: "Call not found" });
+      }
+      
+      if (!call.transcript) {
+        return res.status(400).json({ error: "Call has no transcript to analyze" });
+      }
+      
+      // Import the advanced address extractor
+      const { advancedAddressExtractor } = await import('./services/advanced-address-extractor');
+      
+      // Run the address extraction with detailed results
+      const extractionResult = await advancedAddressExtractor.extractAddress(call.transcript);
+      
+      // Get additional debugging information
+      const analysis = {
+        callId: id,
+        transcript: call.transcript,
+        currentAddress: call.location,
+        currentCoordinates: call.latitude && call.longitude ? [call.latitude, call.longitude] : null,
+        extractionResult: extractionResult,
+        extractionMethods: [
+          'unit_sequence',
+          'contextual_pattern', 
+          'standard_pattern',
+          'intersection_pattern',
+          'grid_pattern',
+          'numerical_pattern',
+          'landmark_pattern',
+          'business_pattern'
+        ],
+        recommendations: []
+      };
+      
+      // Add recommendations based on the analysis
+      if (extractionResult.confidence === 0) {
+        analysis.recommendations.push("No address pattern detected in transcript");
+        analysis.recommendations.push("Consider manual address entry or transcript correction");
+      } else if (extractionResult.confidence < 0.8) {
+        analysis.recommendations.push("Low confidence extraction - manual verification recommended");
+      }
+      
+      if (extractionResult.alternativeAddresses && extractionResult.alternativeAddresses.length > 0) {
+        analysis.recommendations.push("Alternative addresses found - review for accuracy");
+      }
+      
+      if (extractionResult.error) {
+        analysis.recommendations.push(`Error during extraction: ${extractionResult.error}`);
+      }
+      
+      res.json(analysis);
+    } catch (error) {
+      console.error('Error analyzing address extraction:', error);
+      res.status(500).json({ error: "Failed to analyze address extraction" });
+    }
+  });
+
+  // Street matcher endpoints
+  app.post("/api/streets/load", async (req, res) => {
+    try {
+      const { streets } = req.body;
+      
+      if (!Array.isArray(streets)) {
+        return res.status(400).json({ error: "Streets must be an array" });
+      }
+      
+      streetMatcher.loadStreetsFromList(streets);
+      const stats = streetMatcher.getStats();
+      
+      res.json({ 
+        message: "Streets loaded successfully", 
+        ...stats 
+      });
+    } catch (error) {
+      console.error("Error loading streets:", error);
+      res.status(500).json({ error: "Failed to load streets" });
+    }
+  });
+
+  app.post("/api/streets/match", async (req, res) => {
+    try {
+      const { address } = req.body;
+      
+      if (!address) {
+        return res.status(400).json({ error: "Address is required" });
+      }
+      
+      const match = streetMatcher.findBestStreetMatch(address);
+      const enhanced = streetMatcher.enhanceAddress(address);
+      
+      res.json({
+        original: address,
+        match: match,
+        enhanced: enhanced
+      });
+    } catch (error) {
+      console.error("Error matching street:", error);
+      res.status(500).json({ error: "Failed to match street" });
+    }
+  });
+
+  app.get("/api/search/similar/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const call = await storage.getCall(id);
+      
+      if (!call) {
+        return res.status(404).json({ error: "Call not found" });
+      }
+      
+      const similar = await nlpClassifier.findSimilarCalls(call.transcript || "");
+      res.json(similar);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to find similar calls" });
+    }
+  });
+
+  // Audio processing endpoints
+  app.get("/api/audio/status", async (req, res) => {
+    try {
+      const audioStatus = audioProcessor.getStatus();
+      const transcriptionStatus = transcriptionService.getStatus();
+      const rdioScannerStatus = rdioScannerClient.getStatus();
+      const fileMonitorStatus = rdioFileMonitor.getStatus();
+      const databaseMonitorStatus = rdioDatabaseMonitor.getStatus();
+      const unprocessedSegments = await storage.getUnprocessedSegments();
+      const activeTranscriptions = transcriptionService.getActiveTranscriptions();
+      
+      res.json({
+        audioProcessor: audioStatus,
+        transcriptionService: transcriptionStatus,
+        rdioScanner: rdioScannerStatus,
+        fileMonitor: fileMonitorStatus,
+        databaseMonitor: databaseMonitorStatus,
+        unprocessedSegments: unprocessedSegments.length,
+        recentSegments: unprocessedSegments.slice(0, 5),
+        activeTranscriptions: Array.from(activeTranscriptions.entries()).map(([id, progress]) => ({
+          id,
+          ...progress
+        }))
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get audio status" });
+    }
+  });
+
+  // Get pending audio files in processing folder
+  app.get("/api/audio/pending-files", async (req, res) => {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const audioDir = './ems_audio_processing';
+      
+      if (!fs.existsSync(audioDir)) {
+        return res.json({ files: [] });
+      }
+
+      const files = fs.readdirSync(audioDir)
+        .filter(file => file.endsWith('.m4a'))
+        .map(file => {
+          const filePath = path.join(audioDir, file);
+          const stats = fs.statSync(filePath);
+          return {
+            id: file.replace('.m4a', ''),
+            filename: file,
+            size: stats.size,
+            created: stats.birthtime,
+            modified: stats.mtime
+          };
+        })
+        .sort((a, b) => new Date(a.created).getTime() - new Date(b.created).getTime());
+
+      res.json({ files });
+    } catch (error) {
+      console.error("Error getting pending files:", error);
+      res.status(500).json({ error: "Failed to get pending files" });
+    }
+  });
+
+
+
+  // Delete specific audio file
+  app.delete("/api/audio/file/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const filePath = `./ems_audio_processing/${fileId}.m4a`;
+      
+      const fs = await import('fs');
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+
+      res.json({ success: true, message: "File deleted" });
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      res.status(500).json({ error: "Failed to delete file" });
+    }
+  });
+
+  // Get transcription queue status  
+  app.get("/api/audio/queue-status", async (req, res) => {
+    try {
+      const unprocessedSegments = await storage.getUnprocessedSegments();
+      
+      res.json({
+        queueLength: unprocessedSegments.length,
+        segments: unprocessedSegments.map(segment => ({
+          id: segment.id,
+          filepath: segment.filepath,
+          created: segment.createdAt,
+          processed: segment.processed
+        }))
+      });
+    } catch (error) {
+      console.error("Error getting queue status:", error);
+      res.status(500).json({ error: "Failed to get queue status" });
+    }
+  });
+
+  // Transcribe individual file
+  app.post("/api/audio/transcribe/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const audioDir = './ems_audio_processing';
+      // Add .m4a extension if not present
+      const fileName = fileId.endsWith('.m4a') ? fileId : `${fileId}.m4a`;
+      const filePath = `${audioDir}/${fileName}`;
+      
+      const fs = await import('fs');
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "File not found" });
+      }
+
+      // Create or update audio segment for transcription processing  
+      let audioSegment;
+      try {
+        audioSegment = await storage.createAudioSegment({
+          id: fileId,
+          filepath: filePath,
+          duration: 0, // Will be calculated during processing
+          sampleRate: 48000, // Default sample rate
+          channels: 1, // Default mono channel
+          processed: false
+        });
+      } catch (error: any) {
+        // If segment already exists, update it to mark as unprocessed
+        if (error.code === '23505') {
+          console.log(`Audio segment ${fileId} already exists, updating to unprocessed`);
+          audioSegment = await storage.updateAudioSegment(fileId, { 
+            processed: false,
+            filepath: filePath 
+          });
+          if (!audioSegment) {
+            throw new Error('Failed to update existing audio segment');
+          }
+        } else {
+          throw error;
+        }
+      }
+
+      // Actually trigger the transcription service to process this file
+      console.log(`Triggering transcription for file: ${fileId}`);
+      transcriptionService.transcribeAudioSegment(fileId)
+        .then(result => {
+          console.log(`Transcription completed for ${fileId}:`, result?.utterance);
+        })
+        .catch(error => {
+          console.error(`Transcription failed for ${fileId}:`, error);
+        });
+
+      res.json({ 
+        success: true, 
+        message: "File queued for transcription and processing started",
+        segmentId: audioSegment.id
+      });
+    } catch (error) {
+      console.error("Error queueing file for transcription:", error);
+      res.status(500).json({ error: "Failed to queue file for transcription" });
+    }
+  });
+
+  // Delete individual file
+  app.delete("/api/audio/file/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const audioDir = './ems_audio_processing';
+      const filePath = `${audioDir}/${fileId}`;
+      
+      const fs = await import('fs');
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        res.json({ success: true, message: "File deleted successfully" });
+      } else {
+        res.status(404).json({ error: "File not found" });
+      }
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      res.status(500).json({ error: "Failed to delete file" });
+    }
+  });
+
+  // Get audio file from pending folder
+  app.get("/api/audio/pending/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const audioDir = './ems_audio_processing';
+      
+      // Support both with and without .m4a extension
+      let filePath = `${audioDir}/${fileId}`;
+      const fs = await import('fs');
+      
+      // If file doesn't exist as provided, try adding .m4a extension
+      if (!fs.existsSync(filePath) && !fileId.endsWith('.m4a')) {
+        filePath = `${audioDir}/${fileId}.m4a`;
+      }
+      
+      console.log('Looking for audio file:', filePath);
+      
+      if (!fs.existsSync(filePath)) {
+        console.log('Audio file not found:', filePath);
+        return res.status(404).json({ error: "File not found" });
+      }
+
+      const stat = fs.statSync(filePath);
+      const fileSize = stat.size;
+      const range = req.headers.range;
+
+      if (range) {
+        const parts = range.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunksize = (end - start) + 1;
+        const file = fs.createReadStream(filePath, { start, end });
+        const head = {
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunksize,
+          'Content-Type': 'audio/mp4',
+        };
+        res.writeHead(206, head);
+        file.pipe(res);
+      } else {
+        const head = {
+          'Content-Length': fileSize,
+          'Content-Type': 'audio/mp4',
+        };
+        res.writeHead(200, head);
+        fs.createReadStream(filePath).pipe(res);
+      }
+    } catch (error) {
+      console.error("Error serving audio file:", error);
+      res.status(500).json({ error: "Failed to serve audio file" });
+    }
+  });
+
+  // Remove item from transcription queue
+  app.delete("/api/audio/remove-from-queue/:segmentId", async (req, res) => {
+    try {
+      const { segmentId } = req.params;
+      
+      // Find and delete the audio segment from the database
+      const segment = await storage.getAudioSegment(segmentId);
+      if (!segment) {
+        return res.status(404).json({ error: "Segment not found in queue" });
+      }
+
+      // Update the segment to mark it as not processed (removes from queue)
+      await storage.updateAudioSegment(segmentId, { processed: true });
+
+      res.json({ success: true, message: "Removed from transcription queue" });
+    } catch (error) {
+      console.error("Error removing from queue:", error);
+      res.status(500).json({ error: "Failed to remove from queue" });
+    }
+  });
+
+  // Clear all items from transcription queue
+  app.delete("/api/audio/clear-queue", async (req, res) => {
+    try {
+      // Get all unprocessed segments
+      const unprocessedSegments = await storage.getUnprocessedSegments();
+      
+      // Mark all as processed to remove from queue
+      for (const segment of unprocessedSegments) {
+        await storage.updateAudioSegment(segment.id, { processed: true });
+      }
+
+      res.json({ 
+        success: true, 
+        message: `Cleared ${unprocessedSegments.length} segments from transcription queue`,
+        count: unprocessedSegments.length
+      });
+    } catch (error) {
+      console.error("Error clearing queue:", error);
+      res.status(500).json({ error: "Failed to clear transcription queue" });
+    }
+  });
+
+  // Get pending files
+  app.get("/api/audio/pending-files", async (req, res) => {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const audioDir = './ems_audio_processing';
+      
+      if (!fs.existsSync(audioDir)) {
+        return res.json({ files: [] });
+      }
+
+      const files = fs.readdirSync(audioDir)
+        .filter(file => file.endsWith('.m4a'))
+        .map(filename => {
+          const filePath = path.join(audioDir, filename);
+          const stat = fs.statSync(filePath);
+          return {
+            id: filename,
+            filename,
+            size: stat.size,
+            created: stat.birthtime.toISOString()
+          };
+        })
+        .sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
+
+      res.json({ files });
+    } catch (error) {
+      console.error("Error getting pending files:", error);
+      res.status(500).json({ error: "Failed to get pending files" });
+    }
+  });
+
+  // Get transcription queue status
+  app.get("/api/audio/queue-status", async (req, res) => {
+    try {
+      const unprocessedSegments = await storage.getUnprocessedSegments();
+      const segments = unprocessedSegments.map(segment => ({
+        id: segment.id,
+        created: segment.timestamp?.toISOString() || new Date().toISOString(),
+        filepath: segment.filepath
+      }));
+
+      res.json({ 
+        queueLength: segments.length,
+        segments 
+      });
+    } catch (error) {
+      console.error("Error getting queue status:", error);
+      res.status(500).json({ error: "Failed to get queue status" });
+    }
+  });
+
+  // Clear all pending files
+  app.delete("/api/audio/clear-pending", async (req, res) => {
+    try {
+      const fs = await import('fs');
+      const audioDir = './ems_audio_processing';
+      let deletedCount = 0;
+      
+      if (fs.existsSync(audioDir)) {
+        const files = fs.readdirSync(audioDir).filter(file => file.endsWith('.m4a'));
+        for (const file of files) {
+          fs.unlinkSync(`${audioDir}/${file}`);
+          deletedCount++;
+        }
+      }
+
+      res.json({ success: true, message: `Deleted ${deletedCount} files` });
+    } catch (error) {
+      console.error("Error clearing files:", error);
+      res.status(500).json({ error: "Failed to clear files" });
+    }
+  });
+
+
+
+  // Rdio Scanner Server Management
+  app.get("/api/rdio-scanner/status", async (req, res) => {
+    try {
+      // Check if rdioScannerManager is initialized
+      if (!rdioScannerManager) {
+        return res.json({
+          running: false,
+          pid: null,
+          port: null,
+          url: null,
+          adminUrl: null,
+          autoRestart: false,
+          restartAttempts: 0,
+          maxRestartAttempts: 0,
+          error: "Rdio Scanner manager not initialized"
+        });
+      }
+      
+      const status = rdioScannerManager.getStatus();
+      res.json({
+        running: status.running,
+        pid: status.pid,
+        port: status.port,
+        url: status.running ? `http://localhost:${status.port}` : null,
+        adminUrl: status.running ? `http://localhost:${status.port}/admin` : null,
+        autoRestart: status.autoRestart,
+        restartAttempts: status.restartAttempts,
+        maxRestartAttempts: status.maxRestartAttempts
+      });
+    } catch (error) {
+      console.error("Error checking Rdio Scanner status:", error);
+      res.json({
+        running: false,
+        pid: null,
+        port: null,
+        url: null,
+        adminUrl: null,
+        autoRestart: false,
+        restartAttempts: 0,
+        maxRestartAttempts: 0,
+        error: error instanceof Error ? error.message : "Failed to check Rdio Scanner status"
+      });
+    }
+  });
+
+  app.post("/api/rdio-scanner/start", async (req, res) => {
+    try {
+      const started = await rdioScannerManager.start();
+      if (started) {
+        const status = rdioScannerManager.getStatus();
+        res.json({
+          success: true,
+          message: "Rdio Scanner started successfully",
+          pid: status.pid,
+          port: status.port
+        });
+      } else {
+        res.json({
+          success: false,
+          message: "Failed to start Rdio Scanner server"
+        });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to start Rdio Scanner server" });
+    }
+  });
+
+  app.post("/api/rdio-scanner/stop", async (req, res) => {
+    try {
+      const stopped = await rdioScannerManager.stop();
+      if (stopped) {
+        res.json({
+          success: true,
+          message: "Rdio Scanner stopped successfully"
+        });
+      } else {
+        res.json({
+          success: false,
+          message: "Failed to stop Rdio Scanner server"
+        });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to stop Rdio Scanner server" });
+    }
+  });
+
+  app.post("/api/rdio-scanner/restart", async (req, res) => {
+    try {
+      console.log('Manual restart requested for Rdio Scanner server');
+      await rdioScannerManager.stop();
+      const started = await rdioScannerManager.start();
+      if (started) {
+        const status = rdioScannerManager.getStatus();
+        res.json({
+          success: true,
+          message: "Rdio Scanner restarted successfully",
+          pid: status.pid,
+          port: status.port
+        });
+      } else {
+        res.json({
+          success: false,
+          message: "Failed to restart Rdio Scanner server"
+        });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to restart Rdio Scanner server" });
+    }
+  });
+
+  app.post("/api/rdio-scanner/auto-restart", async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      if (enabled) {
+        rdioScannerManager.enableAutoRestart();
+        res.json({ success: true, message: "Auto-restart enabled" });
+      } else {
+        rdioScannerManager.disableAutoRestart();
+        res.json({ success: true, message: "Auto-restart disabled" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update auto-restart setting" });
+    }
+  });
+
+  // Comprehensive audio system health check endpoint
+  app.get("/api/audio/health", async (req, res) => {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const healthInfo = {
+        system: {
+          nodeEnv: process.env.NODE_ENV,
+          platform: process.platform,
+          cwd: process.cwd(),
+          nodeVersion: process.version
+        },
+        rdioScanner: {
+          dbPath: path.join(process.cwd(), 'rdio-scanner-server/rdio-scanner.db'),
+          dbExists: false,
+          dbSize: 0,
+          accessible: false
+        },
+        recentCalls: {
+          total: 0,
+          withAudio: 0,
+          sampleCall: null
+        },
+        directories: []
+      };
+      
+      // Check Rdio Scanner database
+      const rdioDbPath = path.join(process.cwd(), 'rdio-scanner-server/rdio-scanner.db');
+      healthInfo.rdioScanner.dbExists = fs.existsSync(rdioDbPath);
+      
+      if (healthInfo.rdioScanner.dbExists) {
+        const stats = fs.statSync(rdioDbPath);
+        healthInfo.rdioScanner.dbSize = stats.size;
+        
+        try {
+          const Database = await import('better-sqlite3');
+          const db = new Database.default(rdioDbPath, { readonly: true });
+          const result = db.prepare('SELECT COUNT(*) as count FROM rdioScannerCalls').get() as { count: number };
+          healthInfo.rdioScanner.accessible = true;
+          db.close();
+        } catch (e) {
+          healthInfo.rdioScanner.accessible = false;
+        }
+      }
+      
+      // Check recent calls
+      try {
+        const calls = await storage.getRecentCalls(10);
+        healthInfo.recentCalls.total = calls.length;
+        healthInfo.recentCalls.withAudio = calls.filter(c => {
+          const metadata = c.metadata as any;
+          return metadata?.rdioCallId;
+        }).length;
+        
+        if (calls.length > 0) {
+          const call = calls[0];
+          const metadata = call.metadata as any;
+          healthInfo.recentCalls.sampleCall = {
+            id: call.id,
+            audioSegmentId: call.audioSegmentId,
+            rdioCallId: metadata?.rdioCallId,
+            timestamp: call.timestamp
+          } as any;
+        }
+      } catch (e) {
+        healthInfo.recentCalls.total = -1;
+      }
+      
+      // List key directories
+      try {
+        healthInfo.directories = fs.readdirSync(process.cwd()).filter(item => 
+          fs.statSync(path.join(process.cwd(), item)).isDirectory()
+        );
+      } catch (e) {
+        healthInfo.directories = ['Error reading directories'] as any;
+      }
+      
+      res.json(healthInfo);
+    } catch (error: any) {
+      res.status(500).json({ error: 'Health check failed', details: error.message });
+    }
+  });
+
+  // Serve audio segments
+  app.get("/api/audio/segment/:id", async (req, res) => {
+    try {
+      const segmentId = req.params.id;
+      
+      // First try to find the audio segment directly in the database
+      const audioSegment = await storage.getAudioSegment(segmentId);
+      let rdioCallId: number | undefined;
+      
+      if (audioSegment) {
+        // Extract Rdio Scanner call ID from metadata
+        const metadata = audioSegment.metadata as any;
+        rdioCallId = metadata?.rdioCallId;
+      }
+      
+      // If not found in audio segments, search through calls
+      if (!rdioCallId) {
+        // First try to get call by audio segment ID
+        const call = await storage.getCallByAudioSegmentId(segmentId);
+        
+        if (call) {
+          const metadata = call.metadata as any;
+          rdioCallId = metadata?.rdioCallId;
+        }
+      }
+      
+      if (!rdioCallId) {
+        return res.status(404).json({ error: "No Rdio Scanner call ID found for this audio segment" });
+      }
+      
+      // Access the Rdio Scanner database directly to get audio
+      const Database = await import('better-sqlite3');
+      const path = await import('path');
+      const fs = await import('fs');
+      
+      const rdioDbPath = path.join(process.cwd(), 'rdio-scanner-server/rdio-scanner.db');
+      
+      // Check if database exists before trying to access it
+      if (!fs.existsSync(rdioDbPath)) {
+        console.log(`Rdio Scanner database not found at: ${rdioDbPath}`);
+        return res.status(503).json({ 
+          error: "Audio database not available",
+          details: "Rdio Scanner database file not found",
+          segmentId: segmentId,
+          rdioCallId: rdioCallId
+        });
+      }
+      
+      // Access local database directly
+      console.log(`Accessing Rdio Scanner database at: ${rdioDbPath}`);
+      
+      // CRITICAL: rdio-scanner.db is READ-ONLY and must NEVER be modified
+      const db = new Database.default(rdioDbPath, { readonly: true });
+      
+      try {
+        // Query for the audio data directly from the database
+        const stmt = db.prepare('SELECT audio, audioType FROM rdioScannerCalls WHERE id = ?');
+        const result = stmt.get(rdioCallId) as { audio: Buffer; audioType: string } | undefined;
+        
+        if (!result || !result.audio) {
+          db.close();
+          console.log(`Audio not found for Rdio call ID ${rdioCallId} (requested segment: ${segmentId})`);
+          return res.status(404).json({ 
+            error: "Audio not found in Rdio Scanner database",
+            details: `Rdio call ID ${rdioCallId} not found - audio may have been rotated out`,
+            segmentId: segmentId,
+            rdioCallId: rdioCallId
+          });
+        }
+        
+        // Determine content type
+        let contentType = 'audio/mp4'; // default for .m4a
+        if (result.audioType) {
+          switch (result.audioType.toLowerCase()) {
+            case 'audio/mp4':
+            case 'audio/m4a':
+              contentType = 'audio/mp4';
+              break;
+            case 'audio/wav':
+              contentType = 'audio/wav';
+              break;
+            case 'audio/mp3':
+            case 'audio/mpeg':
+              contentType = 'audio/mpeg';
+              break;
+            default:
+              contentType = result.audioType;
+          }
+        }
+        
+        db.close();
+        
+        // Enhanced headers for deployment compatibility
+        const baseHeaders = {
+          'Content-Type': contentType,
+          'Accept-Ranges': 'bytes',
+          'Content-Disposition': `inline; filename="${segmentId}.m4a"`,
+          'Cache-Control': 'public, max-age=3600',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Allow-Headers': 'Range, Content-Type',
+          'X-Content-Type-Options': 'nosniff',
+          'Cross-Origin-Resource-Policy': 'cross-origin'
+        };
+        
+        // Handle range requests for better browser compatibility
+        const range = req.headers.range;
+        if (range) {
+          const parts = range.replace(/bytes=/, "").split("-");
+          const start = parseInt(parts[0], 10);
+          const end = parts[1] ? parseInt(parts[1], 10) : result.audio.length - 1;
+          const chunksize = (end - start) + 1;
+          const chunk = result.audio.slice(start, end + 1);
+          
+          res.writeHead(206, {
+            ...baseHeaders,
+            'Content-Range': `bytes ${start}-${end}/${result.audio.length}`,
+            'Content-Length': chunksize.toString()
+          });
+          
+          res.end(chunk);
+        } else {
+          // Standard response with enhanced deployment support
+          res.writeHead(200, {
+            ...baseHeaders,
+            'Content-Length': result.audio.length.toString()
+          });
+          res.end(result.audio);
+        }
+        
+      } catch (dbError) {
+        if (db) db.close();
+        console.error('Error querying Rdio Scanner database:', dbError);
+        return res.status(500).json({ error: "Failed to query Rdio Scanner database" });
+      }
+      
+    } catch (error) {
+      console.error('Error serving audio segment:', error);
+      res.status(500).json({ error: "Failed to serve audio segment" });
+    }
+  });
+
+  // Serve audio for hospital call segments
+  app.get("/api/hospital-call-segments/:id/audio", async (req, res) => {
+    try {
+      const segmentId = parseInt(req.params.id);
+      
+      // Get the hospital call segment by ID
+      const segment = await storage.getHospitalCallSegmentById(segmentId);
+      
+      if (!segment) {
+        return res.status(404).json({ error: "Hospital call segment not found" });
+      }
+      
+      // Extract Rdio Scanner call ID from metadata
+      const metadata = segment.metadata as any;
+      const rdioCallId = metadata?.rdioCallId;
+      
+      if (!rdioCallId) {
+        return res.status(404).json({ error: "No Rdio Scanner call ID found for this segment" });
+      }
+      
+      // Access the Rdio Scanner database directly to get audio
+      const Database = await import('better-sqlite3');
+      const path = await import('path');
+      
+      const rdioDbPath = path.join(process.cwd(), 'rdio-scanner-server/rdio-scanner.db');
+      const db = new Database.default(rdioDbPath, { readonly: true });
+      
+      try {
+        // Query for the audio data directly from the database
+        const stmt = db.prepare('SELECT audio, audioType FROM rdioScannerCalls WHERE id = ?');
+        const result = stmt.get(rdioCallId) as { audio: Buffer; audioType: string } | undefined;
+        
+        if (!result || !result.audio) {
+          db.close();
+          console.log(`Audio not found for hospital segment ${segmentId} / Rdio call ID ${rdioCallId}`);
+          return res.status(404).json({ 
+            error: "Audio not found in Rdio Scanner database",
+            details: `Rdio call ID ${rdioCallId} not found - audio may have been rotated out`,
+            segmentId: segmentId,
+            rdioCallId: rdioCallId
+          });
+        }
+        
+        // Determine content type
+        let contentType = 'audio/mp4'; // default for .m4a
+        if (result.audioType) {
+          switch (result.audioType.toLowerCase()) {
+            case 'audio/mp4':
+            case 'audio/m4a':
+              contentType = 'audio/mp4';
+              break;
+            case 'audio/wav':
+              contentType = 'audio/wav';
+              break;
+            case 'audio/mp3':
+            case 'audio/mpeg':
+              contentType = 'audio/mpeg';
+              break;
+            default:
+              contentType = result.audioType;
+          }
+        }
+        
+        db.close();
+        
+        // Set appropriate headers for audio streaming
+        res.writeHead(200, {
+          'Content-Type': contentType,
+          'Accept-Ranges': 'bytes',
+          'Content-Disposition': `inline; filename="hospital_segment_${segmentId}.m4a"`,
+          'Content-Length': result.audio.length.toString(),
+          'Cache-Control': 'public, max-age=3600'
+        });
+        
+        // Send the audio data as binary
+        res.end(result.audio);
+        
+      } catch (dbError) {
+        if (db) db.close();
+        console.error('Error querying Rdio Scanner database for hospital segment:', dbError);
+        return res.status(500).json({ error: "Failed to query Rdio Scanner database" });
+      }
+      
+    } catch (error) {
+      console.error('Error serving hospital call segment audio:', error);
+      res.status(500).json({ error: "Failed to serve hospital call segment audio" });
+    }
+  });
+
+  // Retranscribe hospital call segment
+  app.post("/api/hospital-call-segments/:id/retranscribe", requireAuth, async (req, res) => {
+    try {
+      const segmentId = parseInt(req.params.id);
+      
+      // Get the hospital call segment by ID
+      const segment = await storage.getHospitalCallSegmentById(segmentId);
+      
+      if (!segment) {
+        return res.status(404).json({ error: "Hospital call segment not found" });
+      }
+      
+      // Extract Rdio Scanner call ID from metadata
+      const metadata = segment.metadata as any;
+      const rdioCallId = metadata?.rdioCallId;
+      
+      if (!rdioCallId) {
+        return res.status(404).json({ error: "No Rdio Scanner call ID found for this segment" });
+      }
+      
+      // Get audio from Rdio Scanner database
+      const Database = await import('better-sqlite3');
+      const path = await import('path');
+      const fs = await import('fs');
+      
+      const rdioDbPath = path.join(process.cwd(), 'rdio-scanner-server/rdio-scanner.db');
+      const db = new Database.default(rdioDbPath, { readonly: true });
+      
+      try {
+        const stmt = db.prepare('SELECT audio, audioType FROM rdioScannerCalls WHERE id = ?');
+        const result = stmt.get(rdioCallId) as { audio: Buffer; audioType: string } | undefined;
+        
+        if (!result || !result.audio) {
+          db.close();
+          return res.status(404).json({ error: "Audio not found in Rdio Scanner database" });
+        }
+        
+        // Save audio to temp file for Whisper transcription
+        const tempFilePath = path.join(process.cwd(), 'temp_audio', `retranscribe-${segmentId}-${Date.now()}.m4a`);
+        fs.writeFileSync(tempFilePath, result.audio);
+        
+        db.close();
+        
+        // Retranscribe with Whisper
+        const { spawn } = await import('child_process');
+        const transcriptPath = tempFilePath.replace('.m4a', '.txt');
+        
+        const whisperProcess = spawn('whisper', [
+          tempFilePath,
+          '--model', 'base',
+          '--output_format', 'txt',
+          '--output_dir', path.dirname(transcriptPath),
+          '--fp16', 'False'
+        ]);
+        
+        await new Promise<void>((resolve, reject) => {
+          whisperProcess.on('close', (code) => {
+            if (code === 0) {
+              resolve();
+            } else {
+              reject(new Error(`Whisper process exited with code ${code}`));
+            }
+          });
+          whisperProcess.on('error', reject);
+        });
+        
+        // Read new transcript
+        const newTranscript = fs.readFileSync(transcriptPath, 'utf-8').trim();
+        
+        // Update segment with new transcript
+        await storage.updateHospitalCallSegment(segmentId, {
+          transcript: newTranscript,
+          confidence: 0.85 // Whisper confidence
+        });
+        
+        // Clean up temp files
+        fs.unlinkSync(tempFilePath);
+        fs.unlinkSync(transcriptPath);
+        
+        res.json({ 
+          message: 'Segment retranscribed successfully',
+          segmentId,
+          newTranscript 
+        });
+        
+      } catch (dbError) {
+        db.close();
+        console.error('Error retranscribing hospital segment:', dbError);
+        return res.status(500).json({ error: "Failed to retranscribe segment" });
+      }
+      
+    } catch (error) {
+      console.error('Error retranscribing hospital call segment:', error);
+      res.status(500).json({ error: "Failed to retranscribe hospital call segment" });
+    }
+  });
+
+  // Hospital call transcription endpoint
+  app.post("/api/hospital-calls/:id/transcribe", requireAuth, async (req, res) => {
+    try {
+      const hospitalCallId = parseInt(req.params.id);
+      
+      // Get the hospital call and its segments
+      const hospitalCall = await storage.getHospitalCall(hospitalCallId);
+      if (!hospitalCall) {
+        return res.status(404).json({ error: "Hospital call not found" });
+      }
+      
+      const segments = await storage.getHospitalCallSegments(hospitalCallId);
+      if (!segments.length) {
+        return res.status(404).json({ error: "No segments found for this hospital call" });
+      }
+      
+      let transcribedCount = 0;
+      
+      // Process each segment for transcription
+      for (const segment of segments) {
+        const metadata = segment.metadata as any;
+        const rdioCallId = metadata?.rdioCallId;
+        
+        if (!rdioCallId) {
+          console.log(`Skipping segment ${segment.id} - no rdioCallId`);
+          continue;
+        }
+        
+        // Access the Rdio Scanner database to get audio
+        const Database = await import('better-sqlite3');
+        const path = await import('path');
+        const fs = await import('fs');
+        
+        const rdioDbPath = path.join(process.cwd(), 'rdio-scanner-server/rdio-scanner.db');
+        const db = new Database.default(rdioDbPath, { readonly: true });
+        
+        try {
+          const stmt = db.prepare('SELECT audio, audioType FROM rdioScannerCalls WHERE id = ?');
+          const result = stmt.get(rdioCallId) as { audio: Buffer; audioType: string } | undefined;
+          
+          if (!result || !result.audio) {
+            console.log(`No audio found for segment ${segment.id} / rdio call ${rdioCallId}`);
+            continue;
+          }
+          
+          // Create temporary file for audio processing
+          const audioExtension = result.audioType === 'audio/mp4' ? 'm4a' : 'wav';
+          const tempFilePath = path.join(process.cwd(), `temp_hospital_${Date.now()}.${audioExtension}`);
+          fs.writeFileSync(tempFilePath, result.audio);
+          
+          try {
+            // Use transcription service with OpenAI first, local fallback
+            console.log(`Transcribing hospital call segment ${segment.id} using OpenAI Whisper with local fallback`);
+            
+            let transcriptionResult;
+            
+            // Use the public transcribeAudioBuffer method which handles OpenAI first, local fallback automatically
+            transcriptionResult = await transcriptionService.transcribeAudioBuffer(result.audio, segment.audioSegmentId);
+            
+            if (transcriptionResult && transcriptionResult.utterance) {
+              // Update the segment with the new transcript
+              await storage.updateHospitalCallSegment(segment.id, {
+                transcript: transcriptionResult.utterance,
+                confidence: transcriptionResult.confidence
+              });
+              
+              transcribedCount++;
+              console.log(`Successfully transcribed segment ${segment.id}: "${transcriptionResult.utterance}"`);
+            } else {
+              console.log(`No transcript generated for segment ${segment.id}`);
+            }
+            
+          } catch (transcriptionError) {
+            console.error(`Error transcribing segment ${segment.id}:`, transcriptionError);
+          } finally {
+            // Clean up temp file
+            if (fs.existsSync(tempFilePath)) {
+              fs.unlinkSync(tempFilePath);
+            }
+          }
+          
+        } catch (error) {
+          console.error(`Error transcribing segment ${segment.id}:`, error);
+        } finally {
+          db.close();
+        }
+      }
+      
+      res.json({ 
+        message: `Transcribed ${transcribedCount} segments for hospital call ${hospitalCallId}`,
+        transcribedSegments: transcribedCount
+      });
+      
+    } catch (error) {
+      console.error('Error transcribing hospital call:', error);
+      res.status(500).json({ error: "Failed to transcribe hospital call" });
+    }
+  });
+
+  // Rdio Scanner control endpoints
+  app.post("/api/rdio-scanner/start", async (req, res) => {
+    try {
+      await rdioScannerClient.startPolling();
+      res.json({ message: "Rdio Scanner polling started" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to start Rdio Scanner polling" });
+    }
+  });
+
+  app.post("/api/rdio-scanner/stop", async (req, res) => {
+    try {
+      await rdioScannerClient.stopPolling();
+      res.json({ message: "Rdio Scanner polling stopped" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to stop Rdio Scanner polling" });
+    }
+  });
+
+  // File monitor control endpoints
+  app.post("/api/file-monitor/start", async (req, res) => {
+    try {
+      await rdioFileMonitor.startMonitoring();
+      res.json({ message: "File monitor started successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to start file monitor" });
+    }
+  });
+
+  app.post("/api/file-monitor/stop", async (req, res) => {
+    try {
+      await rdioFileMonitor.stopMonitoring();
+      res.json({ message: "File monitor stopped successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to stop file monitor" });
+    }
+  });
+
+  app.post("/api/file-monitor/scan", async (req, res) => {
+    try {
+      await rdioFileMonitor.triggerScan();
+      res.json({ message: "Manual scan triggered successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to trigger scan" });
+    }
+  });
+
+  app.get("/api/file-monitor/files", async (req, res) => {
+    try {
+      const files = await rdioFileMonitor.getAvailableFiles();
+      res.json({ files, count: files.length });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get available files" });
+    }
+  });
+
+  // Database monitor control endpoints
+  app.post("/api/database-monitor/start", async (req, res) => {
+    try {
+      await rdioDatabaseMonitor.startMonitoring();
+      res.json({ message: "Database monitor started successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to start database monitor" });
+    }
+  });
+
+  app.post("/api/database-monitor/stop", async (req, res) => {
+    try {
+      await rdioDatabaseMonitor.stopMonitoring();
+      res.json({ message: "Database monitor stopped successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to stop database monitor" });
+    }
+  });
+
+  app.post("/api/database-monitor/scan", async (req, res) => {
+    try {
+      await rdioDatabaseMonitor.triggerScan();
+      res.json({ message: "Manual scan triggered successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to trigger scan" });
+    }
+  });
+
+  app.get("/api/database-monitor/calls", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 20;
+      const calls = await rdioDatabaseMonitor.getRecentCalls(limit);
+      res.json({ calls, count: calls.length });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get recent calls" });
+    }
+  });
+
+  app.post("/api/database-monitor/process-all", async (req, res) => {
+    try {
+      console.log('Processing all calls from Rdio Scanner database...');
+      const result = await rdioDatabaseMonitor.processAllCalls();
+      res.json({ 
+        message: "Processing completed",
+        ...result
+      });
+    } catch (error) {
+      console.error('Error processing all calls:', error);
+      res.status(500).json({ error: "Failed to process all calls" });
+    }
+  });
+
+  // Call linking endpoints
+  app.post("/api/calls/:id/link", async (req, res) => {
+    try {
+      const callId = parseInt(req.params.id);
+      const result = await callLinkingService.processCallLinking(callId);
+      res.json({ 
+        success: result,
+        message: result ? "Call linking processed successfully" : "No linking needed or available"
+      });
+    } catch (error) {
+      console.error('Error processing call linking:', error);
+      res.status(500).json({ error: "Failed to process call linking" });
+    }
+  });
+
+  // Transcription fix endpoints
+  app.post("/api/transcriptions/fix-all", requireAuth, async (req, res) => {
+    try {
+      console.log('Starting comprehensive transcription fix...');
+      const result = await transcriptionFixer.fixAllTranscriptions();
+      res.json({ 
+        message: "Transcription fix completed",
+        ...result
+      });
+    } catch (error) {
+      console.error('Error fixing transcriptions:', error);
+      res.status(500).json({ error: "Failed to fix transcriptions" });
+    }
+  });
+
+  // Fix beeping transcripts endpoint
+  app.post("/api/transcriptions/fix-beeping", requireAuth, async (req, res) => {
+    try {
+      console.log('Starting beeping transcript fix...');
+      const { beepingTranscriptFixer } = await import('./scripts/fix-beeping-transcripts');
+      const result = await beepingTranscriptFixer.fixBeepingTranscripts();
+      res.json({ 
+        message: "Beeping transcripts fixed",
+        ...result
+      });
+    } catch (error) {
+      console.error('Error fixing beeping transcripts:', error);
+      res.status(500).json({ error: "Failed to fix beeping transcripts" });
+    }
+  });
+
+  app.post("/api/transcriptions/fix-unknown", requireAuth, async (req, res) => {
+    try {
+      console.log('Fixing unknown call types...');
+      const result = await transcriptionFixer.fixUnknownCalls();
+      res.json({ 
+        message: "Unknown calls fixed",
+        ...result
+      });
+    } catch (error) {
+      console.error('Error fixing unknown calls:', error);
+      res.status(500).json({ error: "Failed to fix unknown calls" });
+    }
+  });
+
+  app.post("/api/transcriptions/fix-locations", requireAuth, async (req, res) => {
+    try {
+      console.log('Fixing missing locations...');
+      const result = await transcriptionFixer.fixMissingLocations();
+      res.json({ 
+        message: "Missing locations fixed",
+        ...result
+      });
+    } catch (error) {
+      console.error('Error fixing locations:', error);
+      res.status(500).json({ error: "Failed to fix locations" });
+    }
+  });
+
+  // Get transcription fix status
+  app.get("/api/transcriptions/status", requireAuth, async (req, res) => {
+    try {
+      const allCalls = await storage.getRecentCalls(5000);
+      const status = {
+        total: allCalls.length,
+        unknown: allCalls.filter(call => call.callType === "Unknown" || call.callType === "Unknown Call Type").length,
+        missingLocation: allCalls.filter(call => !call.location || call.location === "" || call.location === "none").length,
+        lowConfidence: allCalls.filter(call => call.confidence < 0.5).length,
+        recentCalls: allCalls.filter(call => {
+          const callDate = new Date(call.timestamp);
+          const today = new Date();
+          return callDate.toDateString() === today.toDateString();
+        }).length
+      };
+      res.json(status);
+    } catch (error) {
+      console.error('Error getting transcription status:', error);
+      res.status(500).json({ error: "Failed to get transcription status" });
+    }
+  });
+
+  app.post("/api/calls/link-all", async (req, res) => {
+    try {
+      console.log('Processing call linking for all incomplete calls...');
+      const result = await callLinkingService.processAllIncompleteLinks();
+      res.json({ 
+        message: "Call linking completed",
+        ...result
+      });
+    } catch (error) {
+      console.error('Error processing all call linking:', error);
+      res.status(500).json({ error: "Failed to process call linking" });
+    }
+  });
+
+  app.post("/api/rdio-scanner/config", async (req, res) => {
+    try {
+      const { baseUrl, apiKey, systems, talkgroups } = req.body;
+      rdioScannerClient.updateConfig({
+        baseUrl,
+        apiKey,
+        systems,
+        talkgroups
+      });
+      res.json({ message: "Rdio Scanner configuration updated" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update configuration" });
+    }
+  });
+
+  app.post("/api/audio/process-segment/:id", async (req, res) => {
+    try {
+      const segmentId = req.params.id;
+      const segment = await storage.getAudioSegment(segmentId);
+      
+      if (!segment) {
+        return res.status(404).json({ error: "Audio segment not found" });
+      }
+      
+      // Manual transcription trigger
+      const transcriptionResult = await transcriptionService.transcribeAudioSegment(segmentId);
+      
+      if (transcriptionResult) {
+        const classification = await nlpClassifier.classify(transcriptionResult.utterance);
+        
+        const call = await storage.createCall({
+          audioSegmentId: segmentId,
+          transcript: transcriptionResult.utterance,
+          confidence: transcriptionResult.confidence,
+          startMs: transcriptionResult.start_ms,
+          endMs: transcriptionResult.end_ms,
+          callType: classification.callType,
+          location: classification.location,
+          keywords: classification.keywords,
+          embedding: classification.metadata.embedding,
+          urgencyScore: classification.urgencyScore,
+          metadata: classification.metadata,
+          status: CallStatus.ACTIVE
+        });
+        
+        wsService.broadcastNewCall(call);
+        res.json({ call, transcription: transcriptionResult, classification });
+      } else {
+        res.status(400).json({ error: "Transcription failed" });
+      }
+    } catch (error) {
+      console.error('Manual processing error:', error);
+      res.status(500).json({ error: "Failed to process audio segment" });
+    }
+  });
+
+  // Transcription control endpoints
+  app.post("/api/transcription/start", requireAuth, async (req, res) => {
+    try {
+      if ((global as any).transcriptionProcessor) {
+        (global as any).transcriptionProcessor.start();
+        res.json({ message: "Transcription processor started", status: "running" });
+      } else {
+        res.status(500).json({ error: "Transcription processor not available" });
+      }
+    } catch (error) {
+      console.error('Error starting transcription processor:', error);
+      res.status(500).json({ error: "Failed to start transcription processor" });
+    }
+  });
+
+  app.post("/api/transcription/stop", requireAuth, async (req, res) => {
+    try {
+      if ((global as any).transcriptionProcessor) {
+        (global as any).transcriptionProcessor.stop();
+        res.json({ message: "Transcription processor stopped", status: "stopped" });
+      } else {
+        res.status(500).json({ error: "Transcription processor not available" });
+      }
+    } catch (error) {
+      console.error('Error stopping transcription processor:', error);
+      res.status(500).json({ error: "Failed to stop transcription processor" });
+    }
+  });
+
+  app.post("/api/transcription/restart", requireAuth, async (req, res) => {
+    try {
+      if ((global as any).transcriptionProcessor) {
+        await (global as any).transcriptionProcessor.restart();
+        res.json({ message: "Transcription processor restarted", status: "running" });
+      } else {
+        res.status(500).json({ error: "Transcription processor not available" });
+      }
+    } catch (error) {
+      console.error('Error restarting transcription processor:', error);
+      res.status(500).json({ error: "Failed to restart transcription processor" });
+    }
+  });
+
+  app.get("/api/transcription/status", requireAuth, async (req, res) => {
+    try {
+      const isRunning = (global as any).transcriptionProcessor?.isRunning || false;
+      res.json({ 
+        status: isRunning ? "running" : "stopped",
+        isRunning: isRunning 
+      });
+    } catch (error) {
+      console.error('Error getting transcription status:', error);
+      res.status(500).json({ error: "Failed to get transcription status" });
+    }
+  });
+
+  // Clear stuck transcriptions
+  app.post('/api/transcription/clear-stuck', requireAuth, async (req, res) => {
+    try {
+      // Get unprocessed segments and mark them for re-processing
+      const unprocessedSegments = await storage.getUnprocessedSegments();
+      
+      // Mark the first few as processed to clear the queue
+      const segmentsToMark = unprocessedSegments.slice(0, 10);
+      for (const segment of segmentsToMark) {
+        await storage.updateAudioSegment(segment.id, { 
+          processed: true,
+          transcript: "[Marked as processed due to stuck queue]"
+        });
+        console.log(`Marked stuck segment ${segment.id} as processed`);
+      }
+      
+      res.json({ 
+        success: true, 
+        message: `Cleared ${segmentsToMark.length} stuck segments`,
+        totalUnprocessed: unprocessedSegments.length
+      });
+    } catch (error) {
+      console.error('Error clearing stuck transcriptions:', error);
+      res.status(500).json({ error: 'Failed to clear stuck transcriptions' });
+    }
+  });
+
+  // Force process stuck segments
+  app.post('/api/transcription/force-process', requireAuth, async (req, res) => {
+    try {
+      const unprocessedSegments = await storage.getUnprocessedSegments();
+      
+      if (unprocessedSegments.length === 0) {
+        return res.json({ success: true, message: 'No unprocessed segments found' });
+      }
+      
+      // Process up to 5 segments immediately
+      const segmentsToProcess = unprocessedSegments.slice(0, 5);
+      const results = [];
+      
+      for (const segment of segmentsToProcess) {
+        try {
+          console.log(`Force processing segment ${segment.id}`);
+          
+          // Check if file exists
+          const fs = await import('fs');
+          if (!fs.existsSync(segment.filepath)) {
+            // Mark as processed if file is missing
+            await storage.updateAudioSegment(segment.id, { 
+              processed: true,
+              transcript: "[Audio file no longer available]"
+            });
+            results.push({ id: segment.id, status: 'file_missing' });
+            continue;
+          }
+          
+          // Try to transcribe
+          const result = await transcriptionService.transcribeAudioSegment(segment.id);
+          if (result) {
+            results.push({ id: segment.id, status: 'transcribed', transcript: result.utterance });
+          } else {
+            // Mark as processed even if transcription failed
+            await storage.updateAudioSegment(segment.id, { 
+              processed: true,
+              transcript: "[Transcription failed]"
+            });
+            results.push({ id: segment.id, status: 'failed' });
+          }
+        } catch (error) {
+          console.error(`Error processing segment ${segment.id}:`, error);
+          // Mark as processed to prevent retry
+          await storage.updateAudioSegment(segment.id, { 
+            processed: true,
+            transcript: "[Processing error]"
+          });
+          results.push({ id: segment.id, status: 'error', error: error.message });
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        processed: results.length,
+        totalUnprocessed: unprocessedSegments.length,
+        results
+      });
+    } catch (error) {
+      console.error('Error force processing segments:', error);
+      res.status(500).json({ error: 'Failed to force process segments' });
+    }
+  });
+
+  // Trigger transcription retry for low-confidence segments
+  app.post("/api/transcription/retry-low-confidence", requireAuth, async (req, res) => {
+    try {
+      const { transcriptionRetryService } = await import('./services/transcription-retry.js');
+      
+      // Process low confidence segments in background
+      transcriptionRetryService.processLowConfidenceSegments().catch(error => {
+        console.error('Error processing low confidence segments:', error);
+      });
+      
+      res.json({ 
+        success: true, 
+        message: 'Low confidence transcription retry process started'
+      });
+    } catch (error) {
+      console.error('Error starting transcription retry:', error);
+      res.status(500).json({ error: 'Failed to start transcription retry process' });
+    }
+  });
+
+  // Check audio availability for calls
+  app.get("/api/audio/check-availability", requireAuth, async (req, res) => {
+    try {
+      const Database = await import('better-sqlite3');
+      const path = await import('path');
+      
+      const rdioDbPath = path.join(process.cwd(), 'rdio-scanner-server/rdio-scanner.db');
+      const db = new Database.default(rdioDbPath, { readonly: true });
+      
+      // Get all calls with rdio call IDs
+      const calls = await storage.searchCalls({ query: '', limit: 1000 });
+      const callsWithRdioIds = calls.filter(call => 
+        call.metadata && 
+        typeof call.metadata === 'object' && 
+        'rdioCallId' in call.metadata
+      );
+      
+      const availabilityStatus = [];
+      let missingDetails = [];
+      
+      for (const call of callsWithRdioIds) {
+        const rdioCallId = (call.metadata as any).rdioCallId;
+        
+        try {
+          const stmt = db.prepare('SELECT COUNT(*) as count FROM rdioScannerCalls WHERE id = ?');
+          const result = stmt.get(rdioCallId) as { count: number };
+          const isAvailable = result.count > 0;
+          
+          availabilityStatus.push({
+            callId: call.id,
+            audioSegmentId: call.audioSegmentId,
+            rdioCallId: rdioCallId,
+            available: isAvailable,
+            createdAt: call.createdAt,
+            transcript: call.transcript?.substring(0, 100) + '...'
+          });
+          
+          if (!isAvailable) {
+            missingDetails.push({
+              callId: call.id,
+              rdioCallId: rdioCallId,
+              transcript: call.transcript?.substring(0, 100) + '...',
+              timestamp: call.timestamp
+            });
+          }
+        } catch (error) {
+          availabilityStatus.push({
+            callId: call.id,
+            audioSegmentId: call.audioSegmentId,
+            rdioCallId: rdioCallId,
+            available: false,
+            error: 'Database query failed',
+            createdAt: call.createdAt
+          });
+          
+          missingDetails.push({
+            callId: call.id,
+            rdioCallId: rdioCallId,
+            error: 'Query failed',
+            timestamp: call.timestamp
+          });
+        }
+      }
+      
+      db.close();
+      
+      const summary = {
+        total: availabilityStatus.length,
+        available: availabilityStatus.filter(s => s.available).length,
+        missing: availabilityStatus.filter(s => !s.available).length
+      };
+      
+      console.log(`Audio availability check: ${summary.available}/${summary.total} available, ${summary.missing} missing`);
+      if (missingDetails.length > 0) {
+        console.log('Missing audio details:', missingDetails.slice(0, 10));
+      }
+      
+      res.json({
+        summary,
+        details: availabilityStatus,
+        missingDetails: missingDetails.slice(0, 20) // Return first 20 missing files for debugging
+      });
+      
+    } catch (error) {
+      console.error('Error checking audio availability:', error);
+      res.status(500).json({ error: "Failed to check audio availability" });
+    }
+  });
+
+  // Audio upload for testing
+  app.post("/api/audio/upload-test", upload.single('audio'), async (req, res) => {
+    try {
+      const audioFile = req.file;
+      
+      if (!audioFile || !audioFile.buffer) {
+        return res.status(400).json({ error: "Audio file required" });
+      }
+      
+      // Generate unique segment ID for test
+      const segmentId = `test-upload-${Date.now()}`;
+      const filepath = join(process.cwd(), 'audio_segments', `${segmentId}.wav`);
+      
+      // Save uploaded audio file
+      writeFileSync(filepath, audioFile.buffer);
+      
+      // Store audio segment metadata
+      await storage.createAudioSegment({
+        id: segmentId,
+        filepath,
+        duration: 0, // Will be calculated during processing
+        sampleRate: 8000,
+        channels: 1,
+        timestamp: new Date(),
+        processed: false
+      });
+      
+      // Process through transcription pipeline
+      const transcriptionResult = await transcriptionService.transcribeAudioSegment(segmentId);
+      
+      if (transcriptionResult) {
+        const extractedData = {
+          extractedAddress: transcriptionResult.extractedAddress,
+          extractedUnits: transcriptionResult.extractedUnits,
+          extractedCallReason: transcriptionResult.extractedCallReason,
+          extractedTime: transcriptionResult.extractedTime,
+          extractedIntersection: transcriptionResult.extractedIntersection
+        };
+        
+        const classification = await nlpClassifier.classify(transcriptionResult.utterance, extractedData);
+        
+        const call = await storage.createCall({
+          audioSegmentId: segmentId,
+          transcript: transcriptionResult.utterance,
+          confidence: transcriptionResult.confidence,
+          startMs: transcriptionResult.start_ms,
+          endMs: transcriptionResult.end_ms,
+          callType: classification.callType,
+          location: classification.location,
+          keywords: classification.keywords,
+          embedding: classification.metadata.embedding,
+          urgencyScore: classification.urgencyScore,
+          metadata: { ...classification.metadata, source: 'test-upload' },
+          status: CallStatus.ACTIVE,
+          talkgroup: 'TEST',
+          system: 'UPLOAD-TEST'
+        });
+        
+        // Mark segment as processed
+        await storage.updateAudioSegment(segmentId, { processed: true });
+        
+        wsService.broadcastNewCall(call);
+        res.json({ 
+          message: "Audio uploaded and processed successfully",
+          call, 
+          transcription: transcriptionResult, 
+          classification 
+        });
+      } else {
+        res.status(400).json({ error: "Transcription failed - audio may be corrupted or in unsupported format" });
+      }
+    } catch (error) {
+      console.error('Audio upload processing error:', error);
+      res.status(500).json({ error: "Failed to process uploaded audio" });
+    }
+  });
+
+  app.post("/api/audio/test-transcription", async (req, res) => {
+    try {
+      const { text } = req.body;
+      
+      if (!text) {
+        return res.status(400).json({ error: "Text required for test transcription" });
+      }
+      
+      // Test transcription processing pipeline
+      const transcriptionResult = await transcriptionService.transcribeText(text);
+      const classification = await nlpClassifier.classify(transcriptionResult.utterance);
+      
+      const call = await storage.createCall({
+        audioSegmentId: `test-${Date.now()}`,
+        transcript: transcriptionResult.utterance,
+        confidence: transcriptionResult.confidence,
+        startMs: transcriptionResult.start_ms,
+        endMs: transcriptionResult.end_ms,
+        location: classification.location,
+        keywords: classification.keywords,
+        embedding: classification.metadata.embedding,
+        urgencyScore: classification.urgencyScore,
+        metadata: classification.metadata,
+        status: CallStatus.ACTIVE
+      });
+      
+      wsService.broadcastNewCall(call);
+      
+      res.json({ 
+        call, 
+        transcription: transcriptionResult, 
+        classification,
+        message: "Test transcription processed successfully"
+      });
+    } catch (error) {
+      console.error('Test transcription error:', error);
+      res.status(500).json({ error: "Test transcription failed" });
+    }
+  });
+
+  app.post("/api/audio/process-backlog", async (req, res) => {
+    try {
+      // Trigger manual processing of backlog
+      if ((global as any).manualProcessBacklog) {
+        console.log('Manually triggering background processing...');
+        (global as any).manualProcessBacklog();
+        res.json({ message: "Background processing triggered successfully" });
+      } else {
+        res.status(500).json({ error: "Background processor not initialized" });
+      }
+    } catch (error) {
+      console.error('Error triggering background processing:', error);
+      res.status(500).json({ error: "Failed to trigger background processing" });
+    }
+  });
+
+  // Hospital Calls API Routes with pagination and search
+  app.get('/api/hospital-calls', requireAuth, async (req, res) => {
+    try {
+      const hospitalFilter = req.query.hospitalFilter as string;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const search = req.query.search as string | undefined;
+      const sorOnly = req.query.sorOnly === 'true';
+      
+      const offset = (page - 1) * limit;
+      
+      // Get calls with pagination
+      const calls = await storage.getHospitalCalls(limit, hospitalFilter, offset, search, sorOnly);
+      
+      // Get total count for pagination
+      const totalCalls = await storage.getHospitalCallsCount(hospitalFilter, search, sorOnly);
+      
+      // Enhance calls with hospital name mapping and update status based on time
+      const { getHospitalInfo, formatHospitalDisplay } = await import('./services/hospital-talkgroup-mapping');
+      
+      const enhancedCalls = calls.map(call => {
+        const hospitalInfo = getHospitalInfo(call.talkgroup || '');
+        
+        // Check if call should be moved to completed (10 minutes elapsed)
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const shouldBeCompleted = call.status === 'active' && new Date(call.timestamp) < tenMinutesAgo;
+        
+        // Update status if needed
+        if (shouldBeCompleted) {
+          // Update in database asynchronously
+          storage.updateHospitalCall(call.id, { status: 'completed' }).catch(err => 
+            console.error('Error updating hospital call status:', err)
+          );
+        }
+        
+        return {
+          ...call,
+          status: shouldBeCompleted ? 'completed' : call.status,
+          hospitalName: call.hospitalName || hospitalInfo?.hospitalName || `Talkgroup ${call.talkgroup}`,
+          hospitalDisplayName: formatHospitalDisplay(call.talkgroup || ''),
+          hospitalType: hospitalInfo?.type || 'unknown',
+          voiceTypeDescription: call.voiceType ? VoiceTypeClassifier.getVoiceTypeDescription(call.voiceType) : null
+        };
+      });
+      
+      res.json({
+        calls: enhancedCalls,
+        total: totalCalls,
+        page,
+        limit,
+        pages: Math.ceil(totalCalls / limit)
+      });
+    } catch (error) {
+      console.error('Error fetching hospital calls:', error);
+      res.status(500).json({ error: 'Failed to fetch hospital calls' });
+    }
+  });
+
+  app.get('/api/hospital-calls/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const call = await storage.getHospitalCall(id);
+      if (!call) {
+        return res.status(404).json({ error: 'Hospital call not found' });
+      }
+      
+      // Enhance with hospital name mapping
+      const { getHospitalInfo, formatHospitalDisplay } = await import('./services/hospital-talkgroup-mapping');
+      const hospitalInfo = getHospitalInfo(call.talkgroup || '');
+      
+      const enhancedCall = {
+        ...call,
+        hospitalName: call.hospitalName || hospitalInfo?.hospitalName || `Talkgroup ${call.talkgroup}`,
+        hospitalDisplayName: formatHospitalDisplay(call.talkgroup || ''),
+        hospitalType: hospitalInfo?.type || 'unknown',
+        voiceTypeDescription: call.voiceType ? VoiceTypeClassifier.getVoiceTypeDescription(call.voiceType) : null
+      };
+      
+      res.json(enhancedCall);
+    } catch (error) {
+      console.error('Error fetching hospital call:', error);
+      res.status(500).json({ error: 'Failed to fetch hospital call' });
+    }
+  });
+
+  // Update hospital call endpoint
+  app.patch('/api/hospital-calls/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      
+      // If hospitalName is being updated, also update the talkgroup
+      if (updates.hospitalName) {
+        const { HOSPITAL_TALKGROUPS } = await import('./services/hospital-talkgroup-mapping');
+        
+        // Find the talkgroup ID for the selected hospital
+        const talkgroupEntry = Object.entries(HOSPITAL_TALKGROUPS).find(
+          ([_, info]) => info.hospitalName === updates.hospitalName
+        );
+        
+        if (talkgroupEntry) {
+          updates.talkgroup = talkgroupEntry[0]; // Use the talkgroup ID
+        }
+      }
+      
+      const updatedCall = await storage.updateHospitalCall(id, updates);
+      if (!updatedCall) {
+        return res.status(404).json({ error: 'Hospital call not found' });
+      }
+      
+      res.json(updatedCall);
+    } catch (error) {
+      console.error('Error updating hospital call:', error);
+      res.status(500).json({ error: 'Failed to update hospital call' });
+    }
+  });
+
+  // Get all custom hospitals from database
+  app.get('/api/hospitals', async (req, res) => {
+    try {
+      const hospitals = await storage.getAllCustomHospitals();
+      res.json(hospitals);
+    } catch (error) {
+      console.error('Error fetching custom hospitals:', error);
+      res.status(500).json({ error: 'Failed to fetch custom hospitals' });
+    }
+  });
+
+  // Get single custom hospital by ID
+  app.get('/api/hospitals/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const hospital = await storage.getCustomHospital(id);
+      if (!hospital) {
+        return res.status(404).json({ error: 'Hospital not found' });
+      }
+      res.json(hospital);
+    } catch (error) {
+      console.error('Error fetching custom hospital:', error);
+      res.status(500).json({ error: 'Failed to fetch custom hospital' });
+    }
+  });
+
+  // Hospital locations with accurate Indianapolis coordinates
+  app.get('/api/hospitals/locations', (req, res) => {
+    const hospitalLocations = [
+      { name: "Eskenazi Hospital", address: "720 Eskenazi Avenue, Indianapolis, IN 46202", lat: 39.7892, lng: -86.1655 },
+      { name: "IU Health Methodist Hospital", address: "1701 N Senate Blvd, Indianapolis, IN 46202", lat: 39.7847, lng: -86.1714 },
+      { name: "Community Hospital East", address: "1500 N Ritter Ave, Indianapolis, IN 46219", lat: 39.7886, lng: -86.0975 },
+      { name: "Riley Hospital for Children", address: "705 Riley Hospital Dr, Indianapolis, IN 46202", lat: 39.7776, lng: -86.1813 },
+      { name: "St. Vincent Indianapolis", address: "2001 W 86th St, Indianapolis, IN 46260", lat: 39.8758, lng: -86.2119 },
+      { name: "Community North Hospital", address: "7150 Clearvista Dr, Indianapolis, IN 46256", lat: 39.8682, lng: -86.0550 },
+      { name: "Community South Hospital", address: "1402 E County Line Rd, Indianapolis, IN 46227", lat: 39.6439, lng: -86.1081 },
+      { name: "IU Health University Hospital", address: "550 University Blvd, Indianapolis, IN 46202", lat: 39.7729, lng: -86.1814 },
+      { name: "Franciscan Health Indianapolis", address: "5255 E Stop 11 Rd, Indianapolis, IN 46237", lat: 39.6858, lng: -86.0619 },
+      { name: "St. Vincent Carmel", address: "13500 N Meridian St, Carmel, IN 46032", lat: 39.9785, lng: -86.1581 },
+      { name: "Community Westview Hospital", address: "3630 Guion Rd, Indianapolis, IN 46222", lat: 39.7786, lng: -86.2455 },
+      { name: "VA Medical Center", address: "1481 W 10th St, Indianapolis, IN 46202", lat: 39.7789, lng: -86.1781 }
+    ];
+    res.json(hospitalLocations);
+  });
+
+  app.delete('/api/hospital-calls/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteHospitalCall(id);
+      if (!deleted) {
+        return res.status(404).json({ error: 'Hospital call not found' });
+      }
+      res.json({ message: 'Hospital call deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting hospital call:', error);
+      res.status(500).json({ error: 'Failed to delete hospital call' });
+    }
+  });
+
+  // Medical analysis endpoint
+  app.get('/api/hospital-calls/:id/medical-analysis', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { medicalAnalysisService } = await import('./services/medical-analysis');
+      
+      const analysis = await medicalAnalysisService.analyzeHospitalCall(id);
+      res.json(analysis);
+    } catch (error) {
+      console.error('Error generating medical analysis:', error);
+      res.status(500).json({ error: 'Failed to generate medical analysis' });
+    }
+  });
+
+  // Hospital analytics endpoints
+  app.get('/api/hospital-analytics', requireAuth, async (req, res) => {
+    try {
+      const { hospitalAnalyticsService } = await import('./services/hospital-analytics');
+      
+      const dateRange = req.query.from && req.query.to ? {
+        from: new Date(req.query.from as string),
+        to: new Date(req.query.to as string)
+      } : undefined;
+      
+      const analytics = await hospitalAnalyticsService.getHospitalAnalytics(dateRange);
+      res.json(analytics);
+    } catch (error) {
+      console.error('Error generating hospital analytics:', error);
+      res.status(500).json({ error: 'Failed to generate hospital analytics' });
+    }
+  });
+
+  app.get('/api/hospital-analytics/trends', requireAuth, async (req, res) => {
+    try {
+      const { hospitalAnalyticsService } = await import('./services/hospital-analytics');
+      const days = parseInt(req.query.days as string) || 30;
+      
+      const trends = await hospitalAnalyticsService.getCallTrends(days);
+      res.json(trends);
+    } catch (error) {
+      console.error('Error generating call trends:', error);
+      res.status(500).json({ error: 'Failed to generate call trends' });
+    }
+  });
+
+  // Address validation endpoint
+  app.post('/api/address/validate', requireAuth, async (req, res) => {
+    try {
+      const { address } = req.body;
+      
+      if (!address || typeof address !== 'string') {
+        return res.status(400).json({ error: 'Address is required' });
+      }
+
+      const validationResult = await googleAddressValidation.validateAddress(address);
+      res.json(validationResult);
+    } catch (error) {
+      console.error('Error validating address:', error);
+      res.status(500).json({ error: 'Failed to validate address' });
+    }
+  });
+
+  // Export hospital call as ZIP
+  app.get('/api/hospital-calls/:id/export', requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { hospitalExportService } = await import('./services/hospital-export');
+      
+      const exportPath = await hospitalExportService.exportHospitalCall(parseInt(id));
+      
+      res.download(exportPath, `hospital-call-${id}-export.zip`, (err) => {
+        if (err) {
+          console.error('Error downloading export:', err);
+          res.status(500).json({ error: 'Failed to download export' });
+        }
+        
+        // Clean up the export file after download
+        setTimeout(() => {
+          hospitalExportService.cleanupExportFile(exportPath);
+        }, 5000);
+      });
+    } catch (error) {
+      console.error('Error exporting hospital call:', error);
+      res.status(500).json({ error: 'Failed to export hospital call' });
+    }
+  });
+
+  // Unlink audio segment from hospital call
+  app.post('/api/hospital-calls/:id/unlink-segment', requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { segmentId } = req.body;
+      
+      const segment = await storage.getHospitalCallSegmentById(parseInt(segmentId));
+      if (!segment) {
+        return res.status(404).json({ error: 'Segment not found' });
+      }
+      
+      if (segment.hospitalCallId !== parseInt(id)) {
+        return res.status(400).json({ error: 'Segment does not belong to this hospital call' });
+      }
+      
+      // Create a new "unlinked" hospital call for orphaned segments
+      const unlinkHospitalCall = await storage.createHospitalCall({
+        conversationId: `UNLINKED-${Date.now()}`,
+        talkgroup: (segment.metadata as any)?.talkgroup || 'unknown',
+        system: (segment.metadata as any)?.system || 'unknown',
+        hospitalName: 'Unlinked Segments',
+        status: 'unlinked'
+      });
+      
+      // Move the segment to the unlinked hospital call
+      await storage.updateHospitalCallSegment(parseInt(segmentId), {
+        hospitalCallId: unlinkHospitalCall.id
+      });
+      
+      res.json({ message: 'Segment unlinked successfully', unlinkCallId: unlinkHospitalCall.id });
+    } catch (error) {
+      console.error('Error unlinking segment:', error);
+      res.status(500).json({ error: 'Failed to unlink segment' });
+    }
+  });
+
+  // Relink audio segment to hospital call
+  app.post('/api/hospital-calls/:id/relink-segment', requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { segmentId, sequenceNumber } = req.body;
+      
+      const segment = await storage.getHospitalCallSegmentById(parseInt(segmentId));
+      if (!segment) {
+        return res.status(404).json({ error: 'Segment not found' });
+      }
+      
+      // Link the segment to the hospital call
+      await storage.updateHospitalCallSegment(parseInt(segmentId), {
+        hospitalCallId: parseInt(id),
+        sequenceNumber: sequenceNumber || 1
+      });
+      
+      res.json({ message: 'Segment relinked successfully' });
+    } catch (error) {
+      console.error('Error relinking segment:', error);
+      res.status(500).json({ error: 'Failed to relink segment' });
+    }
+  });
+
+  // Get unlinked segments for relinking
+  app.get('/api/hospital-call-segments/unlinked', requireAuth, async (req, res) => {
+    try {
+      // Get segments from "unlinked" hospital calls
+      const unlinkedSegments = await storage.getUnlinkedSegments();
+      res.json(unlinkedSegments);
+    } catch (error) {
+      console.error('Error fetching unlinked segments:', error);
+      res.status(500).json({ error: 'Failed to fetch unlinked segments' });
+    }
+  });
+
+  // Retry transcription for a hospital call segment
+  app.post('/api/hospital-call-segments/:id/retranscribe', requireAuth, async (req, res) => {
+    try {
+      const segmentId = parseInt(req.params.id);
+      
+      console.log(`Retrying transcription for hospital call segment ${segmentId}...`);
+      
+      const result = await transcriptionRetryService.retryHospitalCallSegmentTranscription(segmentId);
+      
+      if (result.success) {
+        res.json({ 
+          success: true, 
+          message: 'Transcription retry completed successfully',
+          transcript: result.transcript,
+          confidence: result.confidence
+        });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          error: result.error || 'Transcription retry failed' 
+        });
+      }
+    } catch (error) {
+      console.error('Error retrying hospital call segment transcription:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Failed to retry transcription' 
+      });
+    }
+  });
+
+  app.get('/api/hospital-calls/:id/segments', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const segments = await storage.getHospitalCallSegments(id);
+      console.log(`Fetching segments for hospital call ${id}: found ${segments.length} segments`);
+      res.json(segments);
+    } catch (error) {
+      console.error('Error fetching hospital call segments:', error);
+      res.status(500).json({ error: 'Failed to fetch hospital call segments' });
+    }
+  });
+
+  // Update hospital call segment transcript
+  app.patch('/api/hospital-call-segments/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      
+      // Get the current segment to find the audio segment ID
+      const currentSegment = await storage.getHospitalCallSegmentById(id);
+      if (!currentSegment) {
+        return res.status(404).json({ error: 'Hospital call segment not found' });
+      }
+      
+      // Update the hospital call segment
+      const updatedSegment = await storage.updateHospitalCallSegment(id, updates);
+      if (!updatedSegment) {
+        return res.status(404).json({ error: 'Failed to update hospital call segment' });
+      }
+      
+      // If transcript is being updated, also update the corresponding call in the calls table
+      if (updates.transcript && currentSegment.audioSegmentId) {
+        try {
+          await storage.updateCallByAudioSegmentId(currentSegment.audioSegmentId, {
+            transcript: updates.transcript
+          });
+        } catch (error) {
+          console.log('Note: Could not update corresponding call transcript:', error);
+        }
+      }
+      
+      res.json(updatedSegment);
+    } catch (error) {
+      console.error('Error updating hospital call segment:', error);
+      res.status(500).json({ error: 'Failed to update hospital call segment' });
+    }
+  });
+
+  // Re-transcribe individual hospital call segment
+  app.post('/api/hospital-call-segments/:id/retranscribe', requireAuth, async (req, res) => {
+    try {
+      const segmentId = parseInt(req.params.id);
+      
+      // Get the segment
+      const segment = await storage.getHospitalCallSegmentById(segmentId);
+      if (!segment) {
+        return res.status(404).json({ error: 'Hospital call segment not found' });
+      }
+      
+      const metadata = segment.metadata as any;
+      const rdioCallId = metadata?.rdioCallId;
+      
+      if (!rdioCallId) {
+        return res.status(400).json({ error: 'No audio reference found for this segment' });
+      }
+      
+      // Access the Rdio Scanner database to get audio
+      const Database = await import('better-sqlite3');
+      const path = await import('path');
+      const fs = await import('fs');
+      
+      const rdioDbPath = path.join(process.cwd(), 'rdio-scanner-server/rdio-scanner.db');
+      const db = new Database.default(rdioDbPath, { readonly: true });
+      
+      try {
+        const stmt = db.prepare('SELECT audio, audioType FROM rdioScannerCalls WHERE id = ?');
+        const result = stmt.get(rdioCallId) as { audio: Buffer; audioType: string } | undefined;
+        
+        if (!result || !result.audio) {
+          return res.status(404).json({ error: 'Audio not found in database' });
+        }
+        
+        // Create temporary file for audio processing
+        const audioExtension = result.audioType === 'audio/mp4' ? 'm4a' : 'wav';
+        const tempFilePath = path.join(process.cwd(), `temp_hospital_${Date.now()}.${audioExtension}`);
+        fs.writeFileSync(tempFilePath, result.audio);
+        
+        try {
+          // Use transcription service with OpenAI first, local fallback
+          console.log(`Re-transcribing hospital call segment ${segment.id} using OpenAI Whisper with local fallback`);
+          
+          let transcriptionResult;
+          
+          // Use the public transcribeAudioBuffer method which handles OpenAI first, local fallback automatically
+          transcriptionResult = await transcriptionService.transcribeAudioBuffer(result.audio, segment.audioSegmentId);
+          
+          if (transcriptionResult && transcriptionResult.utterance) {
+            // Update the segment with the new transcript
+            const updatedSegment = await storage.updateHospitalCallSegment(segment.id, {
+              transcript: transcriptionResult.utterance,
+              confidence: transcriptionResult.confidence || 0.0,
+              processingMetadata: {
+                retranscribedAt: new Date().toISOString(),
+                confidence: transcriptionResult.confidence
+              }
+            });
+            
+            // If audio segment ID exists, also update the corresponding call in the calls table
+            if (segment.audioSegmentId) {
+              try {
+                await storage.updateCallByAudioSegmentId(segment.audioSegmentId, {
+                  transcript: transcriptionResult.utterance,
+                  confidence: transcriptionResult.confidence || 0.0
+                });
+              } catch (error) {
+                console.log('Note: Could not update corresponding call transcript:', error);
+              }
+            }
+            
+            res.json({ 
+              success: true, 
+              transcript: transcriptionResult.utterance,
+              confidence: transcriptionResult.confidence,
+              segment: updatedSegment
+            });
+          } else {
+            res.status(500).json({ error: 'Failed to transcribe audio' });
+          }
+        } finally {
+          // Clean up temp file
+          try {
+            fs.unlinkSync(tempFilePath);
+          } catch (e) {
+            console.error('Error cleaning up temp file:', e);
+          }
+        }
+      } finally {
+        db.close();
+      }
+    } catch (error) {
+      console.error('Error re-transcribing hospital call segment:', error);
+      res.status(500).json({ error: 'Failed to re-transcribe segment' });
+    }
+  });
+
+  app.post('/api/hospital-calls', requireAuth, async (req, res) => {
+    try {
+      const callData = insertHospitalCallSchema.parse(req.body);
+      const call = await storage.createHospitalCall(callData);
+      res.json(call);
+    } catch (error) {
+      console.error('Error creating hospital call:', error);
+      res.status(500).json({ error: 'Failed to create hospital call' });
+    }
+  });
+
+  app.post('/api/hospital-calls/:id/segments', requireAuth, async (req, res) => {
+    try {
+      const hospitalCallId = parseInt(req.params.id);
+      const segmentData = insertHospitalCallSegmentSchema.parse({
+        ...req.body,
+        hospitalCallId
+      });
+      const segment = await storage.createHospitalCallSegment(segmentData);
+      res.json(segment);
+    } catch (error) {
+      console.error('Error creating hospital call segment:', error);
+      res.status(500).json({ error: 'Failed to create hospital call segment' });
+    }
+  });
+
+  // Conversation analysis endpoint for hospital calls
+  app.post('/api/hospital-calls/:id/analyze-conversation', requireAuth, async (req, res) => {
+    try {
+      const hospitalCallId = parseInt(req.params.id);
+      console.log('CONVERSATION ANALYSIS: Starting analysis for hospital call ID:', hospitalCallId);
+      
+      // Get hospital call and its segments
+      const hospitalCall = await storage.getHospitalCall(hospitalCallId);
+      console.log('CONVERSATION ANALYSIS: Found hospital call:', hospitalCall?.conversationId);
+      if (!hospitalCall) {
+        return res.status(404).json({ error: 'Hospital call not found' });
+      }
+      
+      const segments = await storage.getHospitalCallSegments(hospitalCallId);
+      if (segments.length === 0) {
+        return res.status(404).json({ error: 'No segments found for this hospital call' });
+      }
+
+      // Analyze the conversation with Anthropic
+      const analysis = await conversationAnalyzer.analyzeConversation(segments, hospitalCall);
+      
+      // Update the hospital call with the analysis
+      await storage.updateHospitalCall(hospitalCallId, {
+        conversationAnalysis: analysis,
+        analysisCompletedAt: new Date(),
+        sorDetected: analysis.sorDetected,
+        sorPhysician: analysis.physicianMentioned
+      });
+
+      res.json({ 
+        message: 'Conversation analysis completed successfully',
+        analysis 
+      });
+    } catch (error) {
+      console.error('Error analyzing conversation:', error);
+      res.status(500).json({ error: 'Failed to analyze conversation' });
+    }
+  });
+
+  // Audio export endpoint for hospital calls
+  app.post('/api/hospital-calls/:id/export-audio', requireAuth, async (req, res) => {
+    try {
+      const hospitalCallId = parseInt(req.params.id);
+      
+      // Get hospital call and its segments
+      const hospitalCall = await storage.getHospitalCall(hospitalCallId);
+      if (!hospitalCall) {
+        return res.status(404).json({ error: 'Hospital call not found' });
+      }
+      
+      const segments = await storage.getHospitalCallSegments(hospitalCallId);
+      if (segments.length === 0) {
+        return res.status(404).json({ error: 'No audio segments found for this hospital call' });
+      }
+
+      // Import hospital name mapping for better file naming
+      const { getHospitalInfo } = await import('./services/hospital-talkgroup-mapping');
+      const hospitalInfo = getHospitalInfo(hospitalCall.talkgroup || '');
+      
+      // Create export filename
+      const hospitalName = hospitalInfo?.hospitalName?.replace(/[^a-zA-Z0-9]/g, '_') || `Talkgroup_${hospitalCall.talkgroup}`;
+      const timestamp = new Date(hospitalCall.timestamp).toISOString().split('T')[0];
+      const exportFilename = `${hospitalName}_${timestamp}_${hospitalCall.conversationId}.mp3`;
+      
+      // For now, return export info (audio merging would require FFmpeg implementation)
+      const exportInfo = {
+        hospitalCallId,
+        conversationId: hospitalCall.conversationId,
+        hospitalName: hospitalInfo?.hospitalName || `Talkgroup ${hospitalCall.talkgroup}`,
+        timestamp: hospitalCall.timestamp,
+        totalSegments: segments.length,
+        exportFilename,
+        status: 'export_prepared',
+        message: 'Audio export functionality prepared - audio merging implementation pending'
+      };
+      
+      res.json(exportInfo);
+    } catch (error) {
+      console.error('Error preparing hospital call audio export:', error);
+      res.status(500).json({ error: 'Failed to prepare audio export' });
+    }
+  });
+
+  // Validate hospital call time windows
+  app.get('/api/hospital-calls/:id/validate-timeframe', requireAuth, async (req, res) => {
+    try {
+      const hospitalCallId = parseInt(req.params.id);
+      
+      const hospitalCall = await storage.getHospitalCall(hospitalCallId);
+      if (!hospitalCall) {
+        return res.status(404).json({ error: 'Hospital call not found' });
+      }
+      
+      const segments = await storage.getHospitalCallSegments(hospitalCallId);
+      
+      // Import the hospital call grouping service
+      const { hospitalCallGroupingService } = await import('./services/hospital-call-grouping');
+      
+      // Validate the time window
+      const validation = hospitalCallGroupingService.validateConversationTimeWindow(segments);
+      
+      // Check if splitting is needed
+      const splitSuggestion = hospitalCallGroupingService.suggestCallSplit(segments);
+      
+      const response = {
+        hospitalCallId,
+        conversationId: hospitalCall.conversationId,
+        validation,
+        splitSuggestion,
+        totalSegments: segments.length,
+        actualDurationMinutes: Math.round(validation.actualDuration / (60 * 1000) * 10) / 10
+      };
+      
+      res.json(response);
+    } catch (error) {
+      console.error('Error validating hospital call timeframe:', error);
+      res.status(500).json({ error: 'Failed to validate timeframe' });
+    }
+  });
+
+  // Split hospital call if it exceeds time window
+  app.post('/api/hospital-calls/:id/split-timeframe', requireAuth, async (req, res) => {
+    try {
+      const hospitalCallId = parseInt(req.params.id);
+      
+      const hospitalCall = await storage.getHospitalCall(hospitalCallId);
+      if (!hospitalCall) {
+        return res.status(404).json({ error: 'Hospital call not found' });
+      }
+      
+      const segments = await storage.getHospitalCallSegments(hospitalCallId);
+      
+      // Import the hospital call grouping service
+      const { hospitalCallGroupingService } = await import('./services/hospital-call-grouping');
+      
+      // Get split suggestions
+      const splitSuggestion = hospitalCallGroupingService.suggestCallSplit(segments);
+      
+      if (!splitSuggestion.shouldSplit) {
+        return res.json({
+          message: 'No split needed - call is within time constraints',
+          originalCall: hospitalCall,
+          splitGroups: []
+        });
+      }
+      
+      // Create new calls for each split group (simplified for now)
+      const splitResults = {
+        originalCall: hospitalCall,
+        splitGroups: splitSuggestion.splitGroups.map((group, index) => ({
+          groupIndex: index + 1,
+          segments: group.length,
+          timespan: `${Math.round((new Date(group[group.length - 1].timestamp).getTime() - new Date(group[0].timestamp).getTime()) / (60 * 1000))} minutes`,
+          suggestedConversationId: `${hospitalCall.conversationId}-SPLIT-${index + 1}`
+        })),
+        recommendation: splitSuggestion.reason
+      };
+      
+      res.json(splitResults);
+    } catch (error) {
+      console.error('Error splitting hospital call:', error);
+      res.status(500).json({ error: 'Failed to split call' });
+    }
+  });
+
+  // System Settings API Routes
+  app.get('/api/settings', async (req, res) => {
+    try {
+      const settings = await storage.getAllSystemSettings();
+      res.json(settings);
+    } catch (error) {
+      console.error('Error fetching system settings:', error);
+      res.status(500).json({ error: 'Failed to fetch system settings' });
+    }
+  });
+
+  app.get('/api/settings/:key', async (req, res) => {
+    try {
+      const setting = await storage.getSystemSetting(req.params.key);
+      if (!setting) {
+        return res.status(404).json({ error: 'Setting not found' });
+      }
+      res.json(setting);
+    } catch (error) {
+      console.error('Error fetching system setting:', error);
+      res.status(500).json({ error: 'Failed to fetch system setting' });
+    }
+  });
+
+  app.put('/api/settings/:key', requireAuth, async (req, res) => {
+    try {
+      const { value } = req.body;
+      const userId = req.user?.id || 1;
+      
+      const setting = await storage.updateSystemSetting(req.params.key, value, userId);
+      res.json(setting);
+    } catch (error) {
+      console.error('Error updating system setting:', error);
+      res.status(500).json({ error: 'Failed to update system setting' });
+    }
+  });
+
+  app.post('/api/settings', requireAuth, async (req, res) => {
+    try {
+      const settingData = req.body;
+      const userId = req.user?.id || 1;
+      
+      const setting = await storage.createSystemSetting({
+        ...settingData,
+        createdBy: userId
+      });
+      res.json(setting);
+    } catch (error) {
+      console.error('Error creating system setting:', error);
+      res.status(500).json({ error: 'Failed to create system setting' });
+    }
+  });
+
+  // Custom Hospitals API Routes
+
+  app.get('/api/hospitals/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const hospital = await storage.getCustomHospital(id);
+      if (!hospital) {
+        return res.status(404).json({ error: 'Hospital not found' });
+      }
+      res.json(hospital);
+    } catch (error) {
+      console.error('Error fetching custom hospital:', error);
+      res.status(500).json({ error: 'Failed to fetch custom hospital' });
+    }
+  });
+
+  app.post('/api/hospitals', requireAuth, async (req, res) => {
+    try {
+      const hospitalData = req.body;
+      const userId = req.user?.id || 1;
+      
+      const hospital = await storage.createCustomHospital({
+        ...hospitalData,
+        createdBy: userId
+      });
+      res.json(hospital);
+    } catch (error) {
+      console.error('Error creating custom hospital:', error);
+      res.status(500).json({ error: 'Failed to create custom hospital' });
+    }
+  });
+
+  app.put('/api/hospitals/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      
+      const hospital = await storage.updateCustomHospital(id, updates);
+      if (!hospital) {
+        return res.status(404).json({ error: 'Hospital not found' });
+      }
+      res.json(hospital);
+    } catch (error) {
+      console.error('Error updating custom hospital:', error);
+      res.status(500).json({ error: 'Failed to update custom hospital' });
+    }
+  });
+
+  app.delete('/api/hospitals/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteCustomHospital(id);
+      if (!success) {
+        return res.status(404).json({ error: 'Hospital not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting custom hospital:', error);
+      res.status(500).json({ error: 'Failed to delete custom hospital' });
+    }
+  });
+
+  // Custom Talkgroups API Routes
+  app.get('/api/talkgroups', async (req, res) => {
+    try {
+      const talkgroups = await storage.getAllCustomTalkgroups();
+      res.json(talkgroups);
+    } catch (error) {
+      console.error('Error fetching custom talkgroups:', error);
+      res.status(500).json({ error: 'Failed to fetch custom talkgroups' });
+    }
+  });
+
+  app.get('/api/talkgroups/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const talkgroup = await storage.getCustomTalkgroup(id);
+      if (!talkgroup) {
+        return res.status(404).json({ error: 'Talkgroup not found' });
+      }
+      res.json(talkgroup);
+    } catch (error) {
+      console.error('Error fetching custom talkgroup:', error);
+      res.status(500).json({ error: 'Failed to fetch custom talkgroup' });
+    }
+  });
+
+  app.post('/api/talkgroups', requireAuth, async (req, res) => {
+    try {
+      const talkgroupData = req.body;
+      const userId = req.user?.id || 1;
+      
+      const talkgroup = await storage.createCustomTalkgroup({
+        ...talkgroupData,
+        createdBy: userId
+      });
+      res.json(talkgroup);
+    } catch (error) {
+      console.error('Error creating custom talkgroup:', error);
+      res.status(500).json({ error: 'Failed to create custom talkgroup' });
+    }
+  });
+
+  app.put('/api/talkgroups/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      
+      const talkgroup = await storage.updateCustomTalkgroup(id, updates);
+      if (!talkgroup) {
+        return res.status(404).json({ error: 'Talkgroup not found' });
+      }
+      res.json(talkgroup);
+    } catch (error) {
+      console.error('Error updating custom talkgroup:', error);
+      res.status(500).json({ error: 'Failed to update custom talkgroup' });
+    }
+  });
+
+  app.delete('/api/talkgroups/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteCustomTalkgroup(id);
+      if (!success) {
+        return res.status(404).json({ error: 'Talkgroup not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting custom talkgroup:', error);
+      res.status(500).json({ error: 'Failed to delete custom talkgroup' });
+    }
+  });
+
+  // Transcription Dictionary API Routes
+  app.get('/api/transcription-dictionary', async (req, res) => {
+    try {
+      const entries = await storage.getAllTranscriptionEntries();
+      res.json(entries);
+    } catch (error) {
+      console.error('Error fetching transcription dictionary:', error);
+      res.status(500).json({ error: 'Failed to fetch transcription dictionary' });
+    }
+  });
+
+  app.get('/api/transcription-dictionary/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const entry = await storage.getTranscriptionEntry(id);
+      if (!entry) {
+        return res.status(404).json({ error: 'Transcription entry not found' });
+      }
+      res.json(entry);
+    } catch (error) {
+      console.error('Error fetching transcription entry:', error);
+      res.status(500).json({ error: 'Failed to fetch transcription entry' });
+    }
+  });
+
+  app.post('/api/transcription-dictionary', requireAuth, async (req, res) => {
+    try {
+      const entryData = req.body;
+      const userId = req.user?.id || 1;
+      
+      const entry = await storage.createTranscriptionEntry({
+        ...entryData,
+        createdBy: userId
+      });
+      res.json(entry);
+    } catch (error) {
+      console.error('Error creating transcription entry:', error);
+      res.status(500).json({ error: 'Failed to create transcription entry' });
+    }
+  });
+
+  app.put('/api/transcription-dictionary/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      
+      const entry = await storage.updateTranscriptionEntry(id, updates);
+      if (!entry) {
+        return res.status(404).json({ error: 'Transcription entry not found' });
+      }
+      res.json(entry);
+    } catch (error) {
+      console.error('Error updating transcription entry:', error);
+      res.status(500).json({ error: 'Failed to update transcription entry' });
+    }
+  });
+
+  app.delete('/api/transcription-dictionary/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteTranscriptionEntry(id);
+      if (!success) {
+        return res.status(404).json({ error: 'Transcription entry not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting transcription entry:', error);
+      res.status(500).json({ error: 'Failed to delete transcription entry' });
+    }
+  });
+
+  // Weather API endpoints
+  app.get('/api/weather/current', async (req, res) => {
+    try {
+      const { lat, lon } = req.query;
+      
+      if (!lat || !lon) {
+        return res.status(400).json({ error: 'Latitude and longitude are required' });
+      }
+      
+      const weather = await weatherService.getCurrentWeather(
+        parseFloat(lat as string), 
+        parseFloat(lon as string)
+      );
+      
+      if (!weather) {
+        return res.status(503).json({ error: 'Weather service unavailable' });
+      }
+      
+      res.json(weather);
+    } catch (error) {
+      console.error('Error fetching weather data:', error);
+      res.status(500).json({ error: 'Failed to fetch weather data' });
+    }
+  });
+
+  app.get('/api/weather/overlays', async (req, res) => {
+    try {
+      const { zoom } = req.query;
+      const zoomLevel = zoom ? parseInt(zoom as string) : 10;
+      
+      const overlays = weatherService.getWeatherOverlayUrls(zoomLevel);
+      res.json(overlays);
+    } catch (error) {
+      console.error('Error fetching weather overlays:', error);
+      res.status(500).json({ error: 'Failed to fetch weather overlays' });
+    }
+  });
+
+  app.get('/api/weather/status', async (req, res) => {
+    try {
+      res.json({
+        configured: weatherService.isConfigured(),
+        available: weatherService.isConfigured()
+      });
+    } catch (error) {
+      console.error('Error checking weather service status:', error);
+      res.status(500).json({ error: 'Failed to check weather service status' });
+    }
+  });
+
+  // Alert Management API Routes
+  app.get('/api/alerts', requireAuth, async (req, res) => {
+    try {
+      const { limit, userId } = req.query;
+      const alertLimit = limit ? parseInt(limit as string) : 50;
+      const userIdFilter = userId ? parseInt(userId as string) : undefined;
+      
+      const alerts = await storage.getAllAlerts(alertLimit, userIdFilter);
+      res.json(alerts);
+    } catch (error) {
+      console.error('Error fetching alerts:', error);
+      res.status(500).json({ error: 'Failed to fetch alerts' });
+    }
+  });
+
+  app.get('/api/alerts/unread', requireAuth, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      
+      // Check if storage is initialized
+      if (!storage || !storage.getUnreadAlerts) {
+        console.error('Storage not initialized or getUnreadAlerts method missing');
+        return res.json([]); // Return empty array instead of crashing
+      }
+      
+      const alerts = await storage.getUnreadAlerts(userId);
+      res.json(alerts || []); // Ensure we always return an array
+    } catch (error) {
+      console.error('Error fetching unread alerts:', error);
+      // Return empty array instead of 500 error to prevent frontend issues
+      res.json([]);
+    }
+  });
+
+  app.get('/api/alerts/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const alert = await storage.getAlert(id);
+      if (!alert) {
+        return res.status(404).json({ error: 'Alert not found' });
+      }
+      res.json(alert);
+    } catch (error) {
+      console.error('Error fetching alert:', error);
+      res.status(500).json({ error: 'Failed to fetch alert' });
+    }
+  });
+
+  app.post('/api/alerts', requireAuth, async (req, res) => {
+    try {
+      const alertData = req.body;
+      const alert = await storage.createAlert(alertData);
+      
+      // Broadcast new alert to connected clients
+      wsService.broadcastAlert(alert);
+      
+      res.json(alert);
+    } catch (error) {
+      console.error('Error creating alert:', error);
+      res.status(500).json({ error: 'Failed to create alert' });
+    }
+  });
+
+  app.patch('/api/alerts/:id/read', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      const alert = await storage.markAlertAsRead(id, userId);
+      if (!alert) {
+        return res.status(404).json({ error: 'Alert not found' });
+      }
+      
+      // Broadcast alert update
+      wsService.broadcastAlertUpdate(alert);
+      
+      res.json(alert);
+    } catch (error) {
+      console.error('Error marking alert as read:', error);
+      res.status(500).json({ error: 'Failed to mark alert as read' });
+    }
+  });
+
+  app.patch('/api/alerts/:id/acknowledge', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ error: 'User ID required' });
+      }
+      
+      const alert = await storage.acknowledgeAlert(id, userId);
+      if (!alert) {
+        return res.status(404).json({ error: 'Alert not found' });
+      }
+      
+      // Broadcast alert update
+      wsService.broadcastAlertUpdate(alert);
+      
+      res.json(alert);
+    } catch (error) {
+      console.error('Error acknowledging alert:', error);
+      res.status(500).json({ error: 'Failed to acknowledge alert' });
+    }
+  });
+
+  app.delete('/api/alerts/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteAlert(id);
+      if (!success) {
+        return res.status(404).json({ error: 'Alert not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting alert:', error);
+      res.status(500).json({ error: 'Failed to delete alert' });
+    }
+  });
+
+  // Alert Rules API Routes
+  app.get('/api/alert-rules', requireAuth, async (req, res) => {
+    try {
+      const rules = await storage.getAllAlertRules();
+      res.json(rules);
+    } catch (error) {
+      console.error('Error fetching alert rules:', error);
+      res.status(500).json({ error: 'Failed to fetch alert rules' });
+    }
+  });
+
+  app.get('/api/alert-rules/active', requireAuth, async (req, res) => {
+    try {
+      const rules = await storage.getActiveAlertRules();
+      res.json(rules);
+    } catch (error) {
+      console.error('Error fetching active alert rules:', error);
+      res.status(500).json({ error: 'Failed to fetch active alert rules' });
+    }
+  });
+
+  app.get('/api/alert-rules/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const rule = await storage.getAlertRule(id);
+      if (!rule) {
+        return res.status(404).json({ error: 'Alert rule not found' });
+      }
+      res.json(rule);
+    } catch (error) {
+      console.error('Error fetching alert rule:', error);
+      res.status(500).json({ error: 'Failed to fetch alert rule' });
+    }
+  });
+
+  app.post('/api/alert-rules', requireAuth, async (req, res) => {
+    try {
+      const ruleData = req.body;
+      const userId = req.user?.id || 1;
+      
+      const rule = await storage.createAlertRule({
+        ...ruleData,
+        createdBy: userId
+      });
+      res.json(rule);
+    } catch (error) {
+      console.error('Error creating alert rule:', error);
+      res.status(500).json({ error: 'Failed to create alert rule' });
+    }
+  });
+
+  app.put('/api/alert-rules/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      
+      const rule = await storage.updateAlertRule(id, updates);
+      if (!rule) {
+        return res.status(404).json({ error: 'Alert rule not found' });
+      }
+      res.json(rule);
+    } catch (error) {
+      console.error('Error updating alert rule:', error);
+      res.status(500).json({ error: 'Failed to update alert rule' });
+    }
+  });
+
+  app.delete('/api/alert-rules/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteAlertRule(id);
+      if (!success) {
+        return res.status(404).json({ error: 'Alert rule not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting alert rule:', error);
+      res.status(500).json({ error: 'Failed to delete alert rule' });
+    }
+  });
+
+  // User Alert Preferences API Routes
+  app.get('/api/user-alert-preferences', requireAuth, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User ID required' });
+      }
+      
+      const preferences = await storage.getUserAlertPreferences(userId);
+      res.json(preferences);
+    } catch (error) {
+      console.error('Error fetching user alert preferences:', error);
+      res.status(500).json({ error: 'Failed to fetch user alert preferences' });
+    }
+  });
+
+  app.put('/api/user-alert-preferences/:alertType', requireAuth, async (req, res) => {
+    try {
+      const alertType = req.params.alertType;
+      const userId = req.user?.id;
+      const preferences = req.body;
+      
+      if (!userId) {
+        return res.status(401).json({ error: 'User ID required' });
+      }
+      
+      const updated = await storage.updateUserAlertPreferences(userId, alertType, preferences);
+      res.json(updated);
+    } catch (error) {
+      console.error('Error updating user alert preferences:', error);
+      res.status(500).json({ error: 'Failed to update user alert preferences' });
+    }
+  });
+
+  // Aircraft API endpoints
+  app.get('/api/aircraft/near-indianapolis', async (req, res) => {
+    try {
+      const { radius } = req.query;
+      const radiusKm = radius ? parseInt(radius as string) : 100;
+      
+      const aircraft = await aircraftService.getHelicoptersNearIndianapolis(radiusKm);
+      res.json(aircraft);
+    } catch (error) {
+      console.error('Error fetching aircraft data:', error);
+      res.status(500).json({ error: 'Failed to fetch aircraft data' });
+    }
+  });
+
+  app.get('/api/aircraft/helicopters', async (req, res) => {
+    try {
+      const { radius } = req.query;
+      const radiusKm = radius ? parseInt(radius as string) : 100;
+      
+      const helicopters = await aircraftService.getHelicoptersNearIndianapolis(radiusKm);
+      res.json(helicopters);
+    } catch (error) {
+      console.error('Error fetching helicopter data:', error);
+      res.status(500).json({ error: 'Failed to fetch helicopter data' });
+    }
+  });
+
+  // Unit Tag Management API Routes
+  app.get('/api/unit-tags', requireAuth, async (req, res) => {
+    try {
+      const tags = await storage.getAllUnitTags();
+      res.json(tags);
+    } catch (error) {
+      console.error('Error fetching unit tags:', error);
+      res.status(500).json({ error: 'Failed to fetch unit tags' });
+    }
+  });
+
+  app.get('/api/unit-tags/active', requireAuth, async (req, res) => {
+    try {
+      const tags = await storage.getActiveUnitTags();
+      res.json(tags);
+    } catch (error) {
+      console.error('Error fetching active unit tags:', error);
+      res.status(500).json({ error: 'Failed to fetch active unit tags' });
+    }
+  });
+
+  app.get('/api/unit-tags/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tag = await storage.getUnitTag(id);
+      if (!tag) {
+        return res.status(404).json({ error: 'Unit tag not found' });
+      }
+      res.json(tag);
+    } catch (error) {
+      console.error('Error fetching unit tag:', error);
+      res.status(500).json({ error: 'Failed to fetch unit tag' });
+    }
+  });
+
+  app.post('/api/unit-tags', requireAuth, async (req, res) => {
+    try {
+      const tagData = req.body;
+      const tag = await storage.createUnitTag(tagData);
+      res.json(tag);
+    } catch (error) {
+      console.error('Error creating unit tag:', error);
+      res.status(500).json({ error: 'Failed to create unit tag' });
+    }
+  });
+
+  app.put('/api/unit-tags/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      
+      const tag = await storage.updateUnitTag(id, updates);
+      if (!tag) {
+        return res.status(404).json({ error: 'Unit tag not found' });
+      }
+      res.json(tag);
+    } catch (error) {
+      console.error('Error updating unit tag:', error);
+      res.status(500).json({ error: 'Failed to update unit tag' });
+    }
+  });
+
+  app.delete('/api/unit-tags/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteUnitTag(id);
+      if (!success) {
+        return res.status(404).json({ error: 'Unit tag not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting unit tag:', error);
+      res.status(500).json({ error: 'Failed to delete unit tag' });
+    }
+  });
+
+  // Call Unit Tag Management Routes
+  app.get('/api/calls/:callId/units', requireAuth, async (req, res) => {
+    try {
+      const callId = parseInt(req.params.callId);
+      const units = await storage.getCallUnits(callId);
+      res.json(units);
+    } catch (error) {
+      console.error('Error fetching call units:', error);
+      res.status(500).json({ error: 'Failed to fetch call units' });
+    }
+  });
+
+  // Batch fetch units for multiple calls
+  app.post('/api/calls/batch-units', requireAuth, async (req, res) => {
+    try {
+      const { callIds } = req.body;
+      
+      if (!Array.isArray(callIds)) {
+        return res.status(400).json({ error: 'callIds must be an array' });
+      }
+      
+      // Use optimized batch query instead of individual queries
+      const unitsMap = await storage.getBatchCallUnits(callIds);
+      
+      res.json(unitsMap);
+    } catch (error) {
+      console.error('Error batch fetching call units:', error);
+      res.status(500).json({ error: 'Failed to batch fetch call units' });
+    }
+  });
+
+  app.post('/api/calls/:callId/units', requireAuth, async (req, res) => {
+    try {
+      const callId = parseInt(req.params.callId);
+      const { unitIds } = req.body;
+      
+      if (!Array.isArray(unitIds)) {
+        return res.status(400).json({ error: 'unitIds must be an array' });
+      }
+      
+      await storage.addUnitsToCall(callId, unitIds);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error adding units to call:', error);
+      res.status(500).json({ error: 'Failed to add units to call' });
+    }
+  });
+
+  app.delete('/api/calls/:callId/units', requireAuth, async (req, res) => {
+    try {
+      const callId = parseInt(req.params.callId);
+      const { unitIds } = req.body;
+      
+      if (!Array.isArray(unitIds)) {
+        return res.status(400).json({ error: 'unitIds must be an array' });
+      }
+      
+      await storage.removeUnitsFromCall(callId, unitIds);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error removing units from call:', error);
+      res.status(500).json({ error: 'Failed to remove units from call' });
+    }
+  });
+
+  app.get('/api/unit-tags/:unitId/calls', requireAuth, async (req, res) => {
+    try {
+      const unitId = parseInt(req.params.unitId);
+      const calls = await storage.getCallsByUnit(unitId);
+      res.json(calls);
+    } catch (error) {
+      console.error('Error fetching calls by unit:', error);
+      res.status(500).json({ error: 'Failed to fetch calls by unit' });
+    }
+  });
+
+  // Incident Management Routes
+  app.get('/api/incidents', requireAuth, async (req, res) => {
+    try {
+      const { unit, status, dateFrom, dateTo } = req.query;
+      
+      let incidents = await storage.getActiveIncidents();
+      
+      // Apply filters
+      if (unit && unit !== 'all') {
+        incidents = incidents.filter(i => i.unitId === unit);
+      }
+      
+      if (status && status !== 'all') {
+        incidents = incidents.filter(i => i.status === status);
+      }
+      
+      if (dateFrom || dateTo) {
+        const startDate = dateFrom ? new Date(dateFrom as string) : new Date('1970-01-01');
+        const endDate = dateTo ? new Date(dateTo as string) : new Date();
+        incidents = await storage.getIncidentsByTimeRange(startDate, endDate);
+      }
+      
+      res.json(incidents);
+    } catch (error) {
+      console.error('Error fetching incidents:', error);
+      res.status(500).json({ error: 'Failed to fetch incidents' });
+    }
+  });
+
+  // Enhanced incidents endpoint with linked dispatch/hospital data
+  app.get('/api/incidents/enhanced', requireAuth, async (req, res) => {
+    try {
+      const { incidentTracker } = await import('./services/incident-tracker');
+      const enhancedIncidents = await incidentTracker.getEnhancedIncidents();
+      res.json(enhancedIncidents);
+    } catch (error) {
+      console.error('Error fetching enhanced incidents:', error);
+      res.status(500).json({ error: 'Failed to fetch enhanced incidents' });
+    }
+  });
+
+  // Create incidents from existing data
+  app.post('/api/incidents/create-from-data', requireAuth, async (req, res) => {
+    try {
+      const { incidentTracker } = await import('./services/incident-tracker');
+      await incidentTracker.createIncidentsFromExistingData();
+      res.json({ success: true, message: 'Incidents created from existing data' });
+    } catch (error) {
+      console.error('Error creating incidents from data:', error);
+      res.status(500).json({ error: 'Failed to create incidents from data' });
+    }
+  });
+
+  app.get('/api/incidents/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const incident = await storage.getIncident(id);
+      
+      if (!incident) {
+        return res.status(404).json({ error: 'Incident not found' });
+      }
+      
+      res.json(incident);
+    } catch (error) {
+      console.error('Error fetching incident:', error);
+      res.status(500).json({ error: 'Failed to fetch incident' });
+    }
+  });
+
+  app.post('/api/incidents', requireAuth, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      
+      // Convert date strings to Date objects
+      const incidentData = {
+        ...req.body,
+        dispatchTime: req.body.dispatchTime ? new Date(req.body.dispatchTime) : new Date(),
+        hospitalTime: req.body.hospitalTime ? new Date(req.body.hospitalTime) : undefined,
+        actualArrivalTime: req.body.actualArrivalTime ? new Date(req.body.actualArrivalTime) : undefined,
+        transportStartTime: req.body.transportStartTime ? new Date(req.body.transportStartTime) : undefined,
+        createdBy: userId,
+        lastUpdatedBy: userId
+      };
+      
+      const incident = await storage.createIncident(incidentData);
+      
+      // Broadcast new incident to connected clients
+      if (wsService) {
+        wsService.broadcastIncidentCreated(incident);
+      }
+      
+      res.status(201).json(incident);
+    } catch (error) {
+      console.error('Error creating incident:', error);
+      res.status(500).json({ error: 'Failed to create incident' });
+    }
+  });
+
+  app.patch('/api/incidents/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      const updates = {
+        ...req.body,
+        lastUpdatedBy: userId
+      };
+      
+      const incident = await storage.updateIncident(id, updates);
+      
+      if (!incident) {
+        return res.status(404).json({ error: 'Incident not found' });
+      }
+      
+      // Broadcast updated incident to connected clients
+      if (wsService) {
+        wsService.broadcastIncidentUpdated(incident);
+      }
+      
+      res.json(incident);
+    } catch (error) {
+      console.error('Error updating incident:', error);
+      res.status(500).json({ error: 'Failed to update incident' });
+    }
+  });
+
+  app.delete('/api/incidents/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteIncident(id);
+      
+      if (!success) {
+        return res.status(404).json({ error: 'Incident not found' });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting incident:', error);
+      res.status(500).json({ error: 'Failed to delete incident' });
+    }
+  });
+
+  // Get incidents by unit
+  app.get('/api/units/:unitId/incidents', requireAuth, async (req, res) => {
+    try {
+      const { unitId } = req.params;
+      const incidents = await storage.getIncidentsByUnit(unitId);
+      res.json(incidents);
+    } catch (error) {
+      console.error('Error fetching incidents by unit:', error);
+      res.status(500).json({ error: 'Failed to fetch incidents by unit' });
+    }
+  });
+
+  // Link incident to dispatch call
+  app.post('/api/incidents/:id/link-dispatch', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { callId } = req.body;
+      
+      const incident = await storage.updateIncident(id, {
+        transcriptDispatchId: callId,
+        matchStatus: 'matched'
+      });
+      
+      if (!incident) {
+        return res.status(404).json({ error: 'Incident not found' });
+      }
+      
+      res.json(incident);
+    } catch (error) {
+      console.error('Error linking incident to dispatch call:', error);
+      res.status(500).json({ error: 'Failed to link incident to dispatch call' });
+    }
+  });
+
+  // Link incident to hospital call
+  app.post('/api/incidents/:id/link-hospital', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { hospitalCallId } = req.body;
+      
+      const incident = await storage.updateIncident(id, {
+        transcriptHospitalId: hospitalCallId,
+        matchStatus: 'matched'
+      });
+      
+      if (!incident) {
+        return res.status(404).json({ error: 'Incident not found' });
+      }
+      
+      res.json(incident);
+    } catch (error) {
+      console.error('Error linking incident to hospital call:', error);
+      res.status(500).json({ error: 'Failed to link incident to hospital call' });
+    }
+  });
+
+  // Calculate closest hospital for incident
+  app.post('/api/incidents/:id/calculate-hospital', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const incident = await storage.getIncident(id);
+      
+      if (!incident) {
+        return res.status(404).json({ error: 'Incident not found' });
+      }
+      
+      // Get hospital locations from settings
+      const hospitals = await storage.getAllCustomHospitals();
+      
+      // TODO: Use Google Maps API to calculate closest hospital
+      // For now, just return a placeholder response
+      res.json({
+        incidentId: id,
+        closestHospital: hospitals[0]?.hospitalName || 'Unknown',
+        distance: 0,
+        estimatedETA: 0,
+        message: 'Google Maps integration pending'
+      });
+    } catch (error) {
+      console.error('Error calculating closest hospital:', error);
+      res.status(500).json({ error: 'Failed to calculate closest hospital' });
+    }
+  });
+
+  // Alias for frontend compatibility
+  app.get('/api/aircraft/near-indianapolis', async (req, res) => {
+    try {
+      const { radius } = req.query;
+      const radiusKm = radius ? parseInt(radius as string) : 100;
+      
+      const helicopters = await aircraftService.getHelicoptersNearIndianapolis(radiusKm);
+      res.json(helicopters);
+    } catch (error) {
+      console.error('Error fetching helicopter data:', error);
+      res.status(500).json({ error: 'Failed to fetch helicopter data' });
+    }
+  });
+
+  // Weather overlays endpoint for radar
+  app.get('/api/weather/overlays', async (req, res) => {
+    try {
+      // Using OpenWeatherMap tile layer for precipitation radar
+      // These are free tiles that don't require an API key for basic usage
+      const overlays = {
+        precipitation: `https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png`,
+        clouds: `https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png`,
+        temp: `https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png`
+      };
+      
+      res.json(overlays);
+    } catch (error) {
+      console.error('Error fetching weather overlays:', error);
+      res.status(500).json({ error: 'Failed to fetch weather overlays' });
+    }
+  });
+
+  app.get('/api/aircraft/bounds', async (req, res) => {
+    try {
+      const { minLat, maxLat, minLon, maxLon } = req.query;
+      
+      if (!minLat || !maxLat || !minLon || !maxLon) {
+        return res.status(400).json({ 
+          error: 'All bounds parameters (minLat, maxLat, minLon, maxLon) are required' 
+        });
+      }
+      
+      const aircraft = await aircraftService.getAircraftInBounds(
+        parseFloat(minLat as string),
+        parseFloat(maxLat as string),
+        parseFloat(minLon as string),
+        parseFloat(maxLon as string)
+      );
+      
+      res.json(aircraft);
+    } catch (error) {
+      console.error('Error fetching aircraft in bounds:', error);
+      res.status(500).json({ error: 'Failed to fetch aircraft data' });
+    }
+  });
+
+  // Flight path endpoint for specific aircraft (must be before /aircraft/status to avoid conflicts)
+  app.get('/api/aircraft/:id/path', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      if (!id) {
+        return res.status(400).json({ error: 'Aircraft ID is required' });
+      }
+
+      console.log(`Fetching flight path for aircraft: ${id}`);
+      const flightPath = await aircraftService.getFlightPath(id);
+      console.log(`Flight path response for ${id}:`, flightPath.length, 'points');
+      res.json(flightPath);
+    } catch (error) {
+      console.error('Error fetching flight path:', error);
+      res.status(500).json({ error: 'Failed to fetch flight path data' });
+    }
+  });
+
+  app.get('/api/aircraft/status', async (req, res) => {
+    try {
+      res.json({
+        configured: true,
+        authenticated: true,
+        available: true,
+        provider: 'FlightRadar24',
+        radius: 75
+      });
+    } catch (error) {
+      console.error('Error checking aircraft service status:', error);
+      res.status(500).json({ error: 'Failed to check aircraft service status' });
+    }
+  });
+
+  // Data Export API Routes
+  app.get('/api/export/transcripts', requireAuth, async (req, res) => {
+    try {
+      // Get all calls with transcripts
+      const calls = await storage.getRecentCalls(10000); // Get up to 10000 calls
+      
+      // Filter for calls with transcripts
+      const callsWithTranscripts = calls.filter(call => call.transcript && call.transcript.trim() !== '');
+      
+      // Convert to CSV format
+      const csvHeader = 'ID,Timestamp,Call Type,Location,Address,Transcript,Confidence,Talkgroup,Talkgroup Name,Latitude,Longitude\n';
+      const csvRows = callsWithTranscripts.map(call => {
+        const timestamp = new Date(call.timestamp).toISOString();
+        const callType = call.callType || 'Unknown';
+        const location = call.location || '';
+        const address = call.address || '';
+        const transcript = call.transcript ? `"${call.transcript.replace(/"/g, '""')}"` : '';
+        const confidence = call.confidence || 0;
+        const talkgroup = call.rdioTalkgroup || '';
+        const talkgroupName = call.rdioTalkgroup ? talkgroupMapper.getDisplayName(call.rdioTalkgroup.toString()) : '';
+        const lat = call.latitude || '';
+        const lng = call.longitude || '';
+        
+        return `${call.id},${timestamp},${callType},${location},"${address}",${transcript},${confidence},${talkgroup},"${talkgroupName}",${lat},${lng}`;
+      }).join('\n');
+      
+      const csvContent = csvHeader + csvRows;
+      
+      // Set headers for CSV download
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="ems-transcripts.csv"');
+      res.send(csvContent);
+    } catch (error) {
+      console.error('Error exporting transcripts:', error);
+      res.status(500).json({ error: 'Failed to export transcripts' });
+    }
+  });
+
+  app.get('/api/export/settings', requireAuth, async (req, res) => {
+    try {
+      // Gather all settings data
+      const systemSettings = await storage.getAllSystemSettings();
+      const hospitals = await storage.getAllCustomHospitals();
+      const talkgroups = await storage.getAllCustomTalkgroups();
+      const transcriptionDictionary = await storage.getAllTranscriptionEntries();
+      const unitTags = await storage.getAllUnitTags();
+      
+      const exportData = {
+        exportDate: new Date().toISOString(),
+        systemSettings,
+        hospitals,
+        talkgroups,
+        transcriptionDictionary,
+        unitTags
+      };
+      
+      // Set headers for JSON download
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', 'attachment; filename="ems-settings.json"');
+      res.json(exportData);
+    } catch (error) {
+      console.error('Error exporting settings:', error);
+      res.status(500).json({ error: 'Failed to export settings' });
+    }
+  });
+
+  return httpServer;
+}
+
+async function initializeAudioPipeline() {
+  const sdrHost = process.env.SDR_HOST || 'localhost';
+  const sdrPort = parseInt(process.env.SDR_PORT || '9999');
+  const sdrPipe = process.env.SDR_PIPE_PATH;
+
+  // Setup audio processor event handlers
+  audioProcessor.on('segmentReady', async (segmentId: string) => {
+    console.log(`Processing audio segment: ${segmentId}`);
+    
+    try {
+      // Transcribe audio
+      const transcriptionResult = await transcriptionService.transcribeAudioSegment(segmentId);
+      
+      if (transcriptionResult) {
+        // Classify and analyze
+        const classification = await nlpClassifier.classify(transcriptionResult.utterance);
+        
+        // Create call record
+        const call = await storage.createCall({
+          audioSegmentId: segmentId,
+          transcript: transcriptionResult.utterance,
+          confidence: transcriptionResult.confidence,
+          startMs: transcriptionResult.start_ms,
+          location: classification.location,
+          keywords: classification.keywords,
+          embedding: classification.metadata.embedding,
+          urgencyScore: classification.urgencyScore,
+          metadata: classification.metadata,
+          status: CallStatus.ACTIVE
+        });
+        
+        console.log(`Created call record: ${call.id} - ${call.callType}`);
+        
+        // Geocode the call location if available
+        if (call.location) {
+          try {
+            const geocoded = await geocodingService.geocodeAndUpdateCall(call.id);
+            if (geocoded) {
+              // Get the updated call with coordinates
+              const updatedCall = await storage.getCall(call.id);
+              if (updatedCall) {
+                // Broadcast updated call with coordinates
+                if (wsService) {
+                  wsService.broadcastCallUpdate(updatedCall);
+                }
+              }
+            }
+          } catch (error) {
+            console.error(`Error geocoding call ${call.id}:`, error);
+          }
+        }
+        
+        // Broadcast to connected clients
+        if (wsService) {
+          wsService.broadcastNewCall(call);
+        
+          // Update system stats
+          const stats = await storage.getCurrentStats();
+          wsService.broadcastStatsUpdate(stats);
+        }
+      }
+    } catch (error) {
+      console.error(`Error processing segment ${segmentId}:`, error);
+    }
+  });
+
+  audioProcessor.on('connected', () => {
+    console.log('Audio processor connected');
+    storage.updateSystemHealth({
+      component: 'audio_processor',
+      status: 'healthy',
+      metadata: { connected: true }
+    });
+  });
+
+  audioProcessor.on('disconnected', () => {
+    console.log('Audio processor disconnected');
+    storage.updateSystemHealth({
+      component: 'audio_processor',
+      status: 'warning',
+      metadata: { connected: false }
+    });
+  });
+
+  audioProcessor.on('error', (error) => {
+    console.error('Audio processor error:', error);
+    storage.updateSystemHealth({
+      component: 'audio_processor',
+      status: 'error',
+      metadata: { error: error.message }
+    });
+  });
+
+  // Setup Rdio Scanner client event handlers
+  rdioScannerClient.on('connected', () => {
+    console.log('Rdio Scanner client connected');
+    storage.updateSystemHealth({
+      component: 'rdio_scanner',
+      status: 'healthy',
+      metadata: { connected: true }
+    });
+  });
+
+  rdioScannerClient.on('disconnected', () => {
+    console.log('Rdio Scanner client disconnected');
+    storage.updateSystemHealth({
+      component: 'rdio_scanner',
+      status: 'warning',
+      metadata: { connected: false }
+    });
+  });
+
+  rdioScannerClient.on('error', (error) => {
+    console.error('Rdio Scanner client error:', error);
+    storage.updateSystemHealth({
+      component: 'rdio_scanner',
+      status: 'error',
+      metadata: { error: error.message }
+    });
+  });
+
+  rdioScannerClient.on('callCreated', (call) => {
+    console.log(`New call received from Rdio Scanner: ${call.id}`);
+    wsService.broadcastNewCall(call);
+  });
+
+  rdioScannerClient.on('segmentReady', async (segmentId: string) => {
+    console.log(`Processing Rdio Scanner segment: ${segmentId}`);
+    
+    try {
+      // Transcribe audio
+      const transcriptionResult = await transcriptionService.transcribeAudioSegment(segmentId);
+      
+      if (transcriptionResult) {
+        // Classify and analyze
+        const classification = await nlpClassifier.classify(transcriptionResult.utterance);
+        
+        // Update the existing call record with transcription and classification
+        const calls = await storage.searchCalls({ 
+          query: '',
+          limit: 100 
+        });
+        
+        const existingCall = calls.find(c => c.audioSegmentId === segmentId);
+        if (existingCall) {
+          // Update call with transcription and classification
+          await storage.updateCall(existingCall.id, {
+            transcript: transcriptionResult.utterance,
+            confidence: transcriptionResult.confidence,
+            location: classification.location,
+            keywords: classification.keywords,
+            embedding: classification.metadata.embedding,
+            urgencyScore: classification.urgencyScore,
+            metadata: classification.metadata
+          });
+          
+          // Broadcast updated call
+          const updatedCall = await storage.getCall(existingCall.id);
+          if (updatedCall) {
+            wsService.broadcastCallUpdate(updatedCall);
+          }
+        }
+      }
+      
+      // Mark segment as processed
+      await storage.updateAudioSegment(segmentId, { processed: true });
+      
+    } catch (error) {
+      console.error(`Error processing Rdio Scanner segment ${segmentId}:`, error);
+    }
+  });
+
+  // Setup file monitor event handlers for Rdio Scanner file processing
+  rdioFileMonitor.on('segmentReady', async (segmentId: string) => {
+    console.log(`Processing file monitor segment: ${segmentId}`);
+    
+    try {
+      // Use the same processing pipeline as other audio sources
+      const transcriptionResult = await transcriptionService.transcribeAudioSegment(segmentId);
+      
+      if (transcriptionResult) {
+        const classification = await nlpClassifier.classify(transcriptionResult.utterance);
+        
+        // Find and update the existing call record
+        const calls = await storage.searchCalls({ 
+          query: '',
+          limit: 100 
+        });
+        
+        const existingCall = calls.find(c => c.audioSegmentId === segmentId);
+        if (existingCall) {
+          await storage.updateCall(existingCall.id, {
+            transcript: transcriptionResult.utterance,
+            location: classification.location,
+            keywords: classification.keywords,
+            embedding: classification.metadata.embedding,
+            urgencyScore: classification.urgencyScore,
+            metadata: classification.metadata
+          });
+          
+          console.log(`Updated call record: ${existingCall.id} - ${classification.callType}`);
+          
+          // Geocode if location available
+          if (classification.location) {
+            try {
+              const geocoded = await geocodingService.geocodeAndUpdateCall(existingCall.id);
+              if (geocoded) {
+                const updatedCall = await storage.getCall(existingCall.id);
+                if (updatedCall && wsService) {
+                  wsService.broadcastCallUpdate(updatedCall);
+                }
+              }
+            } catch (error) {
+              console.error(`Error geocoding call ${existingCall.id}:`, error);
+            }
+          }
+          
+          // Broadcast updated call
+          const updatedCall = await storage.getCall(existingCall.id);
+          if (updatedCall && wsService) {
+            wsService.broadcastCallUpdate(updatedCall);
+          }
+        }
+      }
+      
+      // Mark segment as processed
+      await storage.updateAudioSegment(segmentId, { processed: true });
+      
+    } catch (error) {
+      console.error(`Error processing file monitor segment ${segmentId}:`, error);
+    }
+  });
+
+  rdioFileMonitor.on('started', () => {
+    console.log('File monitor started successfully');
+    storage.updateSystemHealth({
+      component: 'file_monitor',
+      status: 'healthy',
+      metadata: { monitoring: true }
+    });
+  });
+
+  rdioFileMonitor.on('error', (error) => {
+    console.error('File monitor error:', error);
+    storage.updateSystemHealth({
+      component: 'file_monitor',
+      status: 'error',
+      metadata: { error: error.message }
+    });
+  });
+
+  // Setup database monitor event handlers for Rdio Scanner database processing
+  rdioDatabaseMonitor.on('segmentReady', async (segmentId: string) => {
+    console.log(`Processing database monitor segment: ${segmentId}`);
+    
+    try {
+      // Use the same processing pipeline as other audio sources
+      const transcriptionResult = await transcriptionService.transcribeAudioSegment(segmentId);
+      
+      if (transcriptionResult) {
+        // Use verbatim transcript without AI cleanup (as requested by user)
+        console.log(`Processing verbatim transcript: "${transcriptionResult.utterance.substring(0, 100)}..."`);
+        
+        // Prepare extracted data from post-processing for NLP classifier
+        const extractedData = {
+          extractedAddress: transcriptionResult.extractedAddress,
+          extractedUnits: transcriptionResult.extractedUnits,
+          extractedCallType: transcriptionResult.extractedCallReason
+        };
+        
+        // Classify the verbatim transcript with extracted data
+        const classification = await nlpClassifier.classify(
+          transcriptionResult.utterance,
+          extractedData,
+          segmentId
+        );
+        console.log(`NLP Classification for segment ${segmentId}: callType="${classification.callType}", location="${classification.location || 'none'}"}`);
+        
+        // Find and update the existing call record
+        const calls = await storage.searchCalls({ 
+          query: '',
+          limit: 100 
+        });
+        
+        const existingCall = calls.find(c => c.audioSegmentId === segmentId);
+        if (existingCall) {
+          await storage.updateCall(existingCall.id, {
+            transcript: transcriptionResult.utterance, // Use verbatim transcript
+            confidence: transcriptionResult.confidence, // Add transcription confidence here
+            callType: classification.callType, // Update call type from NLP classification
+            location: classification.location,
+            keywords: classification.keywords,
+            embedding: classification.metadata.embedding,
+            urgencyScore: classification.urgencyScore,
+            metadata: Object.assign(
+              {},
+              existingCall.metadata || {},
+              classification.metadata || {},
+              {
+                transcribed: true,
+                verbatimTranscript: true, // Mark as verbatim
+                rawTranscript: transcriptionResult.utterance
+              }
+            )
+          });
+          
+          console.log(`Updated call record: ${existingCall.id} - ${classification.callType}`);
+          
+          // Extract and tag units for dispatch calls
+          if (existingCall.talkgroup === '10202' || existingCall.talkgroup === '10244') {
+            try {
+              await unitExtractor.tagCallWithUnits(existingCall.id, transcriptionResult.utterance);
+            } catch (error) {
+              console.error(`Error extracting units for call ${existingCall.id}:`, error);
+            }
+          }
+          
+          // Geocode if location available
+          if (classification.location) {
+            try {
+              await geocodingService.geocodeAndUpdateCall(existingCall.id);
+            } catch (error) {
+              console.error(`Error geocoding call ${existingCall.id}:`, error);
+            }
+          }
+          
+          // Broadcast updated call
+          const updatedCall = await storage.getCall(existingCall.id);
+          if (updatedCall) {
+            wsService.broadcastCallUpdate(updatedCall);
+          }
+        }
+      }
+      
+      // Mark segment as processed
+      await storage.updateAudioSegment(segmentId, { processed: true });
+      
+    } catch (error) {
+      console.error(`Error processing database monitor segment ${segmentId}:`, error);
+    }
+  });
+
+  rdioDatabaseMonitor.on('started', () => {
+    console.log('Database monitor started successfully');
+    storage.updateSystemHealth({
+      component: 'rdio_database_monitor',
+      status: 'healthy',
+      metadata: { monitoring: true }
+    });
+  });
+
+  rdioDatabaseMonitor.on('error', (error) => {
+    console.error('Database monitor error:', error);
+    storage.updateSystemHealth({
+      component: 'rdio_database_monitor',
+      status: 'error',
+      metadata: { error: error.message }
+    });
+  });
+
+  // Start audio ingestion systems
+  try {
+    // Start Rdio Scanner server automatically
+    console.log('Starting Rdio Scanner server automatically...');
+    if (rdioScannerManager) {
+      rdioScannerManager.enableAutoRestart();
+    } else {
+      console.warn('rdioScannerManager not available, skipping auto-restart setup');
+    }
+    
+    // Setup manager event handlers
+    rdioScannerManager.on('started', ({ pid, port }) => {
+      console.log(`Rdio Scanner server started automatically with PID ${pid} on port ${port}`);
+      storage.updateSystemHealth({
+        component: 'rdio_scanner_server',
+        status: 'healthy',
+        metadata: { pid, port, autoStarted: true }
+      });
+    });
+
+    rdioScannerManager.on('stopped', () => {
+      console.log('Rdio Scanner server stopped');
+      storage.updateSystemHealth({
+        component: 'rdio_scanner_server',
+        status: 'warning',
+        metadata: { status: 'stopped' }
+      });
+    });
+
+    rdioScannerManager.on('error', (error) => {
+      console.error('Rdio Scanner server error:', error);
+      storage.updateSystemHealth({
+        component: 'rdio_scanner_server',
+        status: 'error',
+        metadata: { error: error.message }
+      });
+    });
+
+    rdioScannerManager.on('restart-failed', (error) => {
+      console.error('Rdio Scanner server failed to restart:', error);
+      storage.updateSystemHealth({
+        component: 'rdio_scanner_server',
+        status: 'error',
+        metadata: { error: 'Auto-restart failed', details: error.message }
+      });
+    });
+
+    rdioScannerManager.on('health-check-passed', () => {
+      storage.updateSystemHealth({
+        component: 'rdio_scanner_server',
+        status: 'healthy',
+        metadata: { healthCheck: 'passed', timestamp: new Date().toISOString() }
+      });
+    });
+
+    rdioScannerManager.on('health-check-failed', (error) => {
+      console.error('Rdio Scanner server health check failed:', error);
+      storage.updateSystemHealth({
+        component: 'rdio_scanner_server',
+        status: 'error',
+        metadata: { healthCheck: 'failed', error: error.message }
+      });
+    });
+
+    // Start the server
+    if (rdioScannerManager) {
+      const started = await rdioScannerManager.start();
+      if (!started) {
+        console.warn('Failed to start Rdio Scanner server automatically');
+      }
+    }
+    
+    // Start database monitor for Rdio Scanner audio extraction
+    if (rdioDatabaseMonitor) {
+      await rdioDatabaseMonitor.startMonitoring();
+      console.log('Database monitor started for Rdio Scanner audio extraction');
+    } else {
+      console.warn('rdioDatabaseMonitor not available, skipping database monitoring');
+    }
+    
+    // Keep file monitor as backup
+    console.log('File monitor available as backup');
+    
+    // Start Rdio Scanner client if configured (keep as backup)
+    if (process.env.RDIO_SCANNER_URL) {
+      // Only start if database monitor is not sufficient
+      console.log('WebSocket client available as backup (currently disabled in favor of database monitoring)');
+    }
+    
+    // Start traditional SDR ingestion as fallback
+    if (sdrPipe) {
+      await audioProcessor.startPipeListener(sdrPipe);
+    } else {
+      await audioProcessor.startSDRTrunkListener(sdrHost, sdrPort);
+    }
+  } catch (error) {
+    console.error('Failed to start audio ingestion:', error);
+  }
+
+  // Initialize the transcription processor for new calls (but disable bulk background processing)
+  initializeTranscriptionProcessor();
+
+  // Start hospital call processor for stuck hospital files
+  console.log('Starting hospital call processor...');
+  if (hospitalCallProcessor) {
+    hospitalCallProcessor.start();
+  } else {
+    console.warn('hospitalCallProcessor not available, skipping hospital call processing');
+  }
+}
+
+// Initialize transcription processor for new calls only (without bulk background processing)
+function initializeTranscriptionProcessor() {
+  console.log('Initializing transcription processor for new calls...');
+  
+  // Set up the global transcription processor object with basic functionality
+  (global as any).transcriptionProcessor = {
+    isRunning: true,
+    start: () => {
+      (global as any).transcriptionProcessor.isRunning = true;
+      console.log('Transcription processor started');
+    },
+    stop: () => {
+      (global as any).transcriptionProcessor.isRunning = false;
+      console.log('Transcription processor stopped');
+    },
+    restart: async () => {
+      (global as any).transcriptionProcessor.stop();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      (global as any).transcriptionProcessor.start();
+      console.log('Transcription processor restarted');
+    }
+  };
+  
+  console.log('Transcription processor initialized and ready for new calls');
+}
+
+// Background process to handle stuck transcriptions (DISABLED to prevent loops)
+async function startBackgroundTranscriptionProcessor() {
+  console.log('Starting background transcription processor...');
+  
+  // Re-enabled to process the backlog of 61 audio files
+  const processUnprocessedAudioSegments = async () => {
+    try {
+      const segments = await storage.getUnprocessedSegments();
+      
+      if (segments.length === 0) {
+        console.log('No unprocessed audio segments found');
+        return;
+      }
+      
+      // Process only one segment at a time to avoid overwhelming the system
+      const segment = segments[0];
+      console.log(`Processing audio segment ${segment.id} (${segments.length} remaining in backlog)`);
+      
+      // Process through transcription service
+      if (transcriptionService) {
+        try {
+          console.log(`Starting transcription for segment ${segment.id}`);
+          const transcriptionResult = await transcriptionService.transcribeAudioSegment(segment.id);
+          if (transcriptionResult) {
+            // Mark segment as processed
+            await storage.updateAudioSegment(segment.id, { processed: true });
+            console.log(`Audio segment ${segment.id} processed successfully with transcript: "${transcriptionResult.utterance}"`);
+          } else {
+            console.log(`Failed to process audio segment ${segment.id} - no transcription result`);
+          }
+        } catch (error) {
+          console.error(`Error processing audio segment ${segment.id}:`, error);
+          // Mark segment as processed even if it failed (e.g., missing file)
+          // This prevents the same segment from being retried indefinitely
+          await storage.updateAudioSegment(segment.id, { processed: true });
+          console.log(`Marked segment ${segment.id} as processed due to error to prevent retry`);
+        }
+      } else {
+        console.log(`TranscriptionService not available for segment ${segment.id}`);
+      }
+    } catch (error) {
+      console.error('Error processing unprocessed audio segments:', error);
+    }
+  };
+  
+  // Process calls with empty transcripts that need processing
+  const processUnprocessedCalls = async () => {
+    try {
+      // Find calls without transcripts that have audio segments
+      const calls = await storage.getRecentCalls(200); // Get recent calls to check
+      const callsNeedingTranscription = calls.filter(call => 
+        (!call.transcript || call.transcript.trim() === '') && 
+        call.audioSegmentId
+      );
+      
+      if (callsNeedingTranscription.length === 0) {
+        console.log('No calls needing transcription found');
+        return;
+      }
+      
+      // Process only one call at a time
+      const call = callsNeedingTranscription[0];
+      console.log(`Processing call ${call.id} for transcription (${callsNeedingTranscription.length} remaining)`);
+      
+      // Process through transcription service
+      if (transcriptionService && call.audioSegmentId) {
+        const transcriptionResult = await transcriptionService.transcribeAudioSegment(call.audioSegmentId);
+        if (transcriptionResult) {
+          // Update call with transcription
+          await storage.updateCall(call.id, {
+            transcript: transcriptionResult.utterance,
+            confidence: transcriptionResult.confidence
+          });
+          console.log(`Call ${call.id} transcript updated successfully`);
+        } else {
+          console.log(`Failed to process call ${call.id} transcription`);
+        }
+      }
+    } catch (error) {
+      console.error('Error processing unprocessed calls:', error);
+    }
+  };
+  
+  // Combined processor - handles both audio segments and calls
+  const processBacklog = async () => {
+    // First, process unprocessed audio segments (these are the 20 files)
+    await processUnprocessedAudioSegments();
+    
+    // Then, process calls with empty transcripts
+    await processUnprocessedCalls();
+  };
+  
+  // Run immediately
+  processBacklog();
+  
+  // Run every 30 seconds, but only process one item at a time
+  setInterval(processBacklog, 30000);
+  
+  // Store reference for manual triggering
+  (global as any).manualProcessBacklog = processBacklog;
+  
+  // Store reference to background processor for control
+  (global as any).transcriptionProcessor = {
+    isRunning: true,
+    intervalId: setInterval(processBacklog, 30000),
+    start: () => {
+      if (!(global as any).transcriptionProcessor.isRunning) {
+        (global as any).transcriptionProcessor.intervalId = setInterval(processBacklog, 30000);
+        (global as any).transcriptionProcessor.isRunning = true;
+        console.log('Background transcription processor started');
+      }
+    },
+    stop: () => {
+      if ((global as any).transcriptionProcessor.isRunning) {
+        clearInterval((global as any).transcriptionProcessor.intervalId);
+        (global as any).transcriptionProcessor.isRunning = false;
+        console.log('Background transcription processor stopped');
+      }
+    },
+    restart: async () => {
+      (global as any).transcriptionProcessor.stop();
+      setTimeout(() => {
+        (global as any).transcriptionProcessor.start();
+        console.log('Background transcription processor restarted');
+      }, 1000);
+    }
+  };
+
+  // Alert system API routes (These routes are already implemented above in the main route registration)
+  
+  /* Removed duplicate route handlers that were causing TypeScript errors */
+
+  // All route handlers are implemented above in the main registerRoutes function
+}

@@ -1,0 +1,92 @@
+You are an expert full‑stack engineer specialized in streaming media, speech‑to‑text, natural‑language analytics, and data visualization.  
+Design a production‑ready project that fulfils the following specification.
+
+────────────────────────────────┤  BUSINESS GOAL  ├────────────────────────────────
+We need an application (“EMS‑Insight”) that continuously ingests the audio feed produced
+by SDRTrunk for Indianapolis‑Marion County EMS dispatch channels, transcribes every call,
+enriches each transcript with AI‑based metadata, stores the results, and provides a web
+dashboard for search, analytics, and trend detection.  The project must be easy to deploy
+to Replit’s container environment and be architected for future multi‑city expansion.
+
+──────────────────────────────┤  FUNCTIONAL SCOPE  ├──────────────────────────────
+1. **Audio ingestion**
+   • Consume the SDRTrunk UDP or pipe output (48 kHz mono PCM or similar).  
+   • Buffer and segment audio into ≤ 30‑second chunks with file rollover timestamps.
+
+2. **Speech‑to‑text**
+   • Use OpenAI Whisper (tiny‑en or base) or Faster‑Whisper for on‑device inference
+     (fallback: OpenAI Whisper API).  
+   • Return JSON with `utterance`, `start_ms`, `end_ms`, `confidence`.
+
+3. **AI enrichment**
+   • NLP pipeline (spaCy + transformer):  
+     – Detect call type (e.g., cardiac arrest, MVC, structure fire).  
+     – Assign EMS priority level (Alpha–Echo).  
+     – Keyword spotting list loaded from YAML.  
+   • Trend‑detection task: daily cron that computes top call categories & anomalies
+     (Facebook Prophet or scikit‑learn’s STL + Z‑score).
+
+4. **Storage & search**
+   • Postgres for structured data (calls, timestamps, metadata).  
+   • pgvector for text‑embedding similarity search (OpenAI text‑embedding‑3‑small).  
+   • SQLAlchemy ORM and Alembic migrations.
+
+5. **API layer**
+   • FastAPI with:
+     `POST /audio` (internal), `GET /calls`, `GET /calls/{id}`, `GET /stats/trends`.
+
+6. **Web UI**
+   • React + Vite + Material‑UI.  
+   • Live table + map (Leaflet) + charts (Plotly) showing:
+     – latest calls with colored priority badges,  
+     – full‑text search and similarity (“sounds like” previous call),  
+     – heat‑map of call density,  
+     – trend chart (7‑ and 30‑day) with anomaly markers.
+
+7. **DevOps**
+   • One‑click “Run” on Replit spins up FastAPI backend and React frontend via `concurrently`.  
+   • `docker-compose.yml` for local dev (Postgres + pgAdmin + MinIO optional).  
+   • `.replit` + `replit.nix` with Whisper and ffmpeg build deps.  
+   • Unit tests (pytest) covering audio chunker, transcription wrapper, NLP classifier.
+
+─────────────────────────────┤  CODE‑GENERATION TASK  ├────────────────────────────
+* Generate a complete, runnable Replit project with the structure:
+
+/backend
+main.py ← FastAPI entry point
+ingestion/
+sdr_listener.py
+chunker.py
+nlp/
+transcribe.py
+classify.py
+embeddings.py
+db/
+models.py
+schemas.py
+migrations/
+tests/
+/frontend
+src/
+App.tsx
+components/
+hooks/
+docker-compose.yml
+.replit
+replit.nix
+README.md
+
+
+* Fill in representative, *working* code for each file (not empty stubs).
+* In README, include:
+– stack description,  
+– how to provide SDRTrunk host/port via `.env`,  
+– how to switch Whisper to API mode,  
+– instructions for adding a second city.
+
+* Provide at least 5 unit‑tests demonstrating ingestion, transcription, and NLP.
+
+* Optimise for clarity and extensibility; comment key functions.
+
+Return the full project in Markdown‑formatted code blocks, grouped by filename.
+Do not output anything except the required code and docs.

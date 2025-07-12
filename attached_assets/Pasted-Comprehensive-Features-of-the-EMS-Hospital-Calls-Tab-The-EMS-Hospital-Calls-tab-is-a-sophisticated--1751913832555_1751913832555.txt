@@ -1,0 +1,64 @@
+Comprehensive Features of the EMS-Hospital Calls Tab
+
+The EMS-Hospital Calls tab is a sophisticated emergency medical communication management system with the following features:
+1. Main Dashboard Tabs
+
+    Active Calls: Shows ongoing hospital communications with real-time updates
+    Completed Calls: Displays finished conversations with AI summaries (currently disabled)
+    SOR Requests: Filters calls requiring Signature of Release from physicians
+    Details Tab: In-depth view of selected conversation segments and audio
+
+2. Hospital Filtering & Search
+
+    Hospital Filter Dropdown: Filter calls by specific hospitals (Methodist, Riley, Eskenazi, or All)
+    Search Functionality: Search through transcripts and call metadata
+    Talkgroup Mapping: Maps radio channels (10255-10273) to 19 Indianapolis hospitals
+
+3. Conversation Management
+
+    Real-time Updates: Auto-refreshes every 5 seconds
+    Conversation Cards: Shows hospital name, timestamp, status badges (Active/Completed/SOR)
+    Time Window Validation: Ensures conversations stay within 7-10 minute compliance window
+    Pagination Controls: Navigate through large datasets (25, 50, 100, 200, or 500 items per page)
+
+4. Audio Segment Features
+
+    Audio Playback: Play/pause controls for each segment
+    Re-transcribe: Force new transcription using OpenAI Whisper
+    Edit Transcript: Modify transcripts with built-in audio player
+    Segment Management: Add/remove segments from conversations
+    Download Export: Export entire conversation as ZIP file with audio
+
+5. Administrative Functions
+
+    Delete Calls: Remove entire hospital conversations
+    Edit Call Details: Modify hospital assignment and metadata
+    Permalink Sharing: Copy direct links to specific conversations
+    Validate Timeframe: Check if conversation exceeds 10-minute limit
+    Split Conversations: Automatically split calls that exceed time limits
+
+6. Specialized Features
+
+    SOR Detection: Automatically identifies Signature of Release requests
+    Speaker Identification: Tracks EMS vs Hospital speakers
+    Confidence Scoring: Shows transcription accuracy percentages
+    Voice Type Classification: Distinguishes automated dispatch from human voice
+    Medical Analysis: Extract key medical details (currently disabled for verbatim mode)
+
+7. User Interface Elements
+
+    Visual Indicators: Icons for hospital, phone, clock, and file types
+    Status Badges: Color-coded for active/completed/SOR states
+    Loading States: Spinners for transcription and analysis operations
+    Error Handling: Toast notifications for success/failure feedback
+    Dark Mode Support: Full theme compatibility
+
+8. Data Display
+
+    Conversation ID: Unique identifier for each hospital communication
+    Timestamps: Shows when calls occurred with "time ago" format
+    Segment Count: Number of audio segments per conversation
+    Hospital Names: Human-readable names instead of talkgroup numbers
+    Transcript Display: Shows verbatim emergency communication text
+
+The system is designed for emergency medical professionals to manage EMS-to-hospital communications, ensuring compliance with time windows, maintaining accurate records, and providing quick access to critical patient information during emergency situations.

@@ -1068,6 +1068,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedCall = await storage.updateCall(id, updateData);
       
+      // Extract and tag units after call update
+      if (updatedCall && updatedCall.transcript) {
+        try {
+          await unitExtractor.tagCallWithUnits(updatedCall.id, updatedCall.transcript);
+          console.log(`Unit extraction completed for re-transcribed call ${id}`);
+        } catch (error) {
+          console.error(`Error extracting units for call ${id}:`, error);
+        }
+      }
+      
       console.log(`Retranscribe Debug - Updated call type in DB: "${updatedCall?.callType}"`);
       console.log(`Re-transcription completed for call ${id}. New transcript: "${newTranscript}"`);
       
@@ -4835,6 +4845,14 @@ async function initializeAudioPipeline() {
         
         console.log(`Created call record: ${call.id} - ${call.callType}`);
         
+        // Extract and tag units for dispatch calls
+        try {
+          await unitExtractor.tagCallWithUnits(call.id, transcriptionResult.utterance);
+          console.log(`Unit extraction completed for call ${call.id}`);
+        } catch (error) {
+          console.error(`Error extracting units for call ${call.id}:`, error);
+        }
+        
         // Geocode the call location if available
         if (call.location) {
           try {
@@ -4958,6 +4976,14 @@ async function initializeAudioPipeline() {
             metadata: classification.metadata
           });
           
+          // Extract and tag units for dispatch calls
+          try {
+            await unitExtractor.tagCallWithUnits(existingCall.id, transcriptionResult.utterance);
+            console.log(`Unit extraction completed for call ${existingCall.id}`);
+          } catch (error) {
+            console.error(`Error extracting units for call ${existingCall.id}:`, error);
+          }
+          
           // Broadcast updated call
           const updatedCall = await storage.getCall(existingCall.id);
           if (updatedCall) {
@@ -5003,6 +5029,14 @@ async function initializeAudioPipeline() {
           });
           
           console.log(`Updated call record: ${existingCall.id} - ${classification.callType}`);
+          
+          // Extract and tag units for dispatch calls
+          try {
+            await unitExtractor.tagCallWithUnits(existingCall.id, transcriptionResult.utterance);
+            console.log(`Unit extraction completed for call ${existingCall.id}`);
+          } catch (error) {
+            console.error(`Error extracting units for call ${existingCall.id}:`, error);
+          }
           
           // Geocode if location available
           if (classification.location) {

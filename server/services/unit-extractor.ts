@@ -79,13 +79,16 @@ export class UnitExtractor {
     
     for (const extracted of extractedUnits) {
       const matchingTag = unitTags.find(tag => 
-        tag.unitType === extracted.unitType && 
+        tag.unitType.toLowerCase() === extracted.unitType.toLowerCase() && 
         tag.unitNumber === extracted.unitNumber &&
         tag.isActive
       );
       
       if (matchingTag) {
         matchedTagIds.push(matchingTag.id);
+        console.log(`Matched unit ${extracted.unitType} ${extracted.unitNumber} to tag ID ${matchingTag.id}`);
+      } else {
+        console.log(`No match found for unit ${extracted.unitType} ${extracted.unitNumber}`);
       }
     }
     

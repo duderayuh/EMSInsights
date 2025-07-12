@@ -239,27 +239,11 @@ export class IncidentTracker {
         }
       }
       
-      // Use Drizzle ORM instead of raw SQL to avoid column issues
-      const incidentRecords = await db.select({
-        id: incidents.id,
-        unitId: incidents.unitId,
-        dispatchTime: incidents.dispatchTime,
-        location: incidents.location,
-        callType: incidents.callType,
-        status: incidents.status,
-        inferredClosestHospital: incidents.inferredClosestHospital,
-        actualHospitalCalled: incidents.actualHospitalCalled,
-        etaGiven: incidents.etaGiven,
-        etaEstimated: incidents.etaEstimated,
-        transcriptDispatchId: incidents.transcriptDispatchId,
-        transcriptHospitalId: incidents.transcriptHospitalId,
-        latitude: incidents.latitude,
-        longitude: incidents.longitude,
-        transportStartTime: incidents.transportStartTime
-      })
-      .from(incidents)
-      .orderBy(desc(incidents.dispatchTime))
-      .limit(100);
+      // Use simple select to avoid column issues
+      const incidentRecords = await db.select()
+        .from(incidents)
+        .orderBy(desc(incidents.dispatchTime))
+        .limit(100);
       
       console.log('Found incidents:', incidentRecords.length);
       
@@ -283,12 +267,14 @@ export class IncidentTracker {
           inferredHospital: row.inferredClosestHospital,
           etaGiven: row.etaGiven,
           etaEstimated: row.etaEstimated,
-          responseTimeMinutes,
+          responseTime: responseTimeMinutes,
           latitude: row.latitude,
           longitude: row.longitude,
+          hospitalDestination: row.hospitalDestination,
+          qiFlag: row.qiFlag,
           // For backward compatibility
-          dispatchCallId: row.transcriptDispatchId,
-          hospitalCallId: row.transcriptHospitalId
+          dispatchCallId: row.dispatchCallId,
+          hospitalCallId: row.hospitalCallId
         };
       });
     } catch (error) {

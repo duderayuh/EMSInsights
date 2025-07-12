@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import http, { createServer, type Server } from "http";
+import https from "https";
 import { writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import multer from "multer";
@@ -77,13 +78,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const isDeployment = process.env.REPLIT_DEPLOYMENT || process.env.NODE_ENV === 'production';
     let targetHost = 'localhost';
     let targetPort = 3001;
+    let useHttps = false;
     
     if (isDeployment && process.env.RDIO_SCANNER_URL) {
       // Parse external Rdio Scanner URL for deployment
-      const externalUrl = new URL(process.env.RDIO_SCANNER_URL);
-      targetHost = externalUrl.hostname;
-      targetPort = parseInt(externalUrl.port) || (externalUrl.protocol === 'https:' ? 443 : 80);
-      console.log(`Using external Rdio Scanner at ${targetHost}:${targetPort}`);
+      try {
+        const externalUrl = new URL(process.env.RDIO_SCANNER_URL);
+        targetHost = externalUrl.hostname;
+        targetPort = parseInt(externalUrl.port) || (externalUrl.protocol === 'https:' ? 443 : 80);
+        useHttps = externalUrl.protocol === 'https:';
+        console.log(`Using external Rdio Scanner at ${useHttps ? 'https' : 'http'}://${targetHost}:${targetPort}`);
+      } catch (error) {
+        console.error('Invalid RDIO_SCANNER_URL:', process.env.RDIO_SCANNER_URL, error);
+      }
     }
     
     const options = {
@@ -96,13 +103,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         host: `${targetHost}:${targetPort}`,
         'x-forwarded-for': req.connection?.remoteAddress || '',
         'x-forwarded-proto': req.protocol || 'http',
-        'x-real-ip': req.connection?.remoteAddress || ''
+        'x-real-ip': req.connection?.remoteAddress || '',
+        'origin': req.headers.origin || `${req.protocol}://${req.get('host')}`
       },
-      timeout: 15000, // 15 second timeout for admin interface
-      agent: false // Don't reuse connections
+      timeout: 30000, // 30 second timeout for external connections
+      agent: false, // Don't reuse connections
+      rejectUnauthorized: false // Allow self-signed certificates for external instances
     };
 
-    const proxyReq = http.request(options, (proxyRes: any) => {
+    // Use https or http module based on protocol
+    const requestModule = useHttps ? https : http;
+    
+    const proxyReq = requestModule.request(options, (proxyRes: any) => {
       // Check if this is an HTML page that needs base href fixing
       const isHtmlPage = proxyRes.headers['content-type']?.includes('text/html');
       
@@ -183,8 +195,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     proxyReq.on('error', (err: any) => {
       console.error('Rdio Scanner proxy request error:', err);
+      console.error(`Failed to connect to ${useHttps ? 'https' : 'http'}://${targetHost}:${targetPort}${forwardPath}`);
+      console.error('Error details:', {
+        code: err.code,
+        message: err.message,
+        errno: err.errno,
+        syscall: err.syscall,
+        hostname: err.hostname,
+        port: err.port
+      });
+      
       if (!res.headersSent) {
-        res.status(502).json({ error: 'Rdio Scanner service unavailable', details: err.message });
+        const errorMessage = isDeployment 
+          ? `Unable to connect to external Rdio Scanner at ${useHttps ? 'https' : 'http'}://${targetHost}:${targetPort}. Error: ${err.message}`
+          : `Rdio Scanner service unavailable. Error: ${err.message}`;
+          
+        res.status(502).json({ 
+          error: 'Rdio Scanner service unavailable', 
+          details: errorMessage,
+          target: `${useHttps ? 'https' : 'http'}://${targetHost}:${targetPort}`,
+          errorCode: err.code
+        });
       }
     });
 

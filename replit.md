@@ -120,6 +120,19 @@ Changelog:
   - Ensures all calls from hospital talkgroups (10256=Methodist, 10257=Riley, 10261=Eskenazi, etc.) are properly labeled
   - System now consistently uses "EMS-Hospital Communications" for all hospital-related calls
 
+- July 12, 2025: Automatic Incident Lifecycle Update System
+  - **AUTOMATED INCIDENT TRACKING**: Implemented automatic status updates when units communicate with hospitals
+  - Created Google Maps distance calculation service for computing ETA between dispatch location and hospital
+  - Modified incident-tracker.ts to update incidents when matching unit calls hospital:
+    - Extracts unit from hospital call transcript
+    - Finds matching dispatched incident within 60-minute window
+    - Sets status to "en_route" with hospital destination
+    - Calculates distance and ETA using Google Maps API
+  - Updated hospital-call-detector.ts to trigger incident updates after hospital call creation and transcription
+  - Enhanced incident display to show hospital destination and calculated ETA columns
+  - System broadcasts incident updates via WebSocket for real-time dashboard updates
+  - Complete automation: Unit gets dispatched → Unit calls hospital → Status changes to "en_route" with ETA
+
 - July 12, 2025: Phase 113 completion - Enhanced Audio Error Handling & Database Rotation Feedback
   - **AUDIO UNAVAILABILITY DIAGNOSIS**: Identified root cause of audio playback issues in deployed app
   - Rdio Scanner database investigation revealed 0 audio records (rdioScannerCalls table empty)

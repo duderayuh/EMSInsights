@@ -2,6 +2,8 @@ import { db } from '../db';
 import { calls, hospitalCalls, incidents, unitTags, callUnitTags, customHospitals } from '@shared/schema';
 import { eq, and, or, desc, gte, lte, like, sql } from 'drizzle-orm';
 import type { Incident, InsertIncident, Call, HospitalCall } from '@shared/schema';
+import { googleMapsDistance } from './google-maps-distance';
+import { getHospitalInfo } from './hospital-talkgroup-mapping';
 
 export class IncidentTracker {
   
@@ -303,27 +305,101 @@ export class IncidentTracker {
    * Updates incident status based on hospital communications
    */
   async updateIncidentFromHospitalCall(hospitalCall: HospitalCall): Promise<void> {
-    // Find related incident based on timestamp and unit
+    console.log(`Processing hospital call ${hospitalCall.id} for incident updates`);
+    
+    // Extract unit from hospital call transcript
+    if (!hospitalCall.transcript) {
+      console.log('No transcript available for hospital call');
+      return;
+    }
+    
+    const unitInfo = this.extractUnitFromTranscript(hospitalCall.transcript);
+    if (!unitInfo) {
+      console.log('No unit found in hospital call transcript');
+      return;
+    }
+    
+    console.log(`Found unit ${unitInfo} in hospital call transcript`);
+    
+    // Find related incident based on unit and recent dispatch time
     const timeWindow = 60 * 60 * 1000; // 60 minutes
     const searchStart = new Date(hospitalCall.timestamp!.getTime() - timeWindow);
-    const searchEnd = new Date(hospitalCall.timestamp!.getTime() + timeWindow);
+    const searchEnd = hospitalCall.timestamp!;
 
     const relatedIncidents = await db.select().from(incidents)
       .where(and(
+        eq(incidents.unitId, unitInfo),
         gte(incidents.dispatchTime, searchStart),
         lte(incidents.dispatchTime, searchEnd),
-        eq(incidents.status, 'dispatched')
+        or(
+          eq(incidents.status, 'dispatched'),
+          eq(incidents.status, 'en_route')
+        )
       ));
 
+    if (relatedIncidents.length === 0) {
+      console.log(`No dispatched incidents found for unit ${unitInfo} within time window`);
+      return;
+    }
+
+    // Get hospital info from talkgroup
+    const hospitalInfo = getHospitalInfo(hospitalCall.talkgroup!);
+    if (!hospitalInfo || !hospitalInfo.address) {
+      console.log('No hospital info or address found for talkgroup', hospitalCall.talkgroup);
+      return;
+    }
+
     for (const incident of relatedIncidents) {
-      await db.update(incidents)
+      console.log(`Updating incident ${incident.id} for unit ${unitInfo}`);
+      
+      // Calculate distance and ETA if we have coordinates
+      let distanceInMiles: number | null = null;
+      let estimatedETA: number | null = null;
+      
+      if (incident.latitude && incident.longitude && hospitalInfo.address) {
+        const distanceResult = await googleMapsDistance.calculateDistance(
+          incident.latitude,
+          incident.longitude,
+          hospitalInfo.address
+        );
+        
+        if (distanceResult) {
+          distanceInMiles = distanceResult.distanceInMiles;
+          estimatedETA = distanceResult.durationInMinutes;
+          console.log(`Calculated distance: ${distanceInMiles} miles, ETA: ${estimatedETA} minutes`);
+        }
+      }
+
+      // Update incident with en_route status
+      const [updatedIncident] = await db.update(incidents)
         .set({
-          transcriptHospitalId: hospitalCall.id,
+          hospitalCallId: hospitalCall.id,
           transportStartTime: hospitalCall.timestamp!,
-          status: 'at_hospital',
-          actualHospitalCalled: hospitalCall.hospital
+          status: 'en_route',
+          transportStatus: 'transporting',
+          hospitalDestination: hospitalInfo.hospitalName,
+          actualHospitalCalled: hospitalInfo.hospitalName,
+          estimatedETA: estimatedETA || this.calculateETA(incident.location, distanceInMiles),
+          notes: `Unit ${unitInfo} called ${hospitalInfo.hospitalName} at ${hospitalCall.timestamp}. Distance: ${distanceInMiles?.toFixed(1) || 'Unknown'} miles`
         })
-        .where(eq(incidents.id, incident.id));
+        .where(eq(incidents.id, incident.id))
+        .returning();
+      
+      console.log(`Updated incident ${incident.id} to en_route status with hospital destination ${hospitalInfo.hospitalName}`);
+      
+      // Broadcast the update via WebSocket
+      try {
+        const websocket = (await import('./websocket')).websocketService;
+        if (websocket && websocket.broadcast) {
+          websocket.broadcast({
+            type: 'incident_updated',
+            incident: updatedIncident
+          });
+          console.log('Broadcasted incident update via WebSocket');
+        }
+      } catch (error) {
+        console.log('WebSocket not available for broadcasting');
+      }
     }
   }
 }

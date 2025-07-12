@@ -105,6 +105,17 @@ export class HospitalCallDetector {
     // Trigger automatic transcription
     await this.triggerAutomaticTranscription(hospitalCallId, audioSegmentId, metadata);
 
+    // Update incident tracker when hospital call is created or updated
+    try {
+      const hospitalCall = await storage.getHospitalCall(hospitalCallId);
+      if (hospitalCall) {
+        const { incidentTracker } = await import('./incident-tracker');
+        await incidentTracker.updateIncidentFromHospitalCall(hospitalCall);
+      }
+    } catch (error) {
+      console.error('Error updating incident from hospital call:', error);
+    }
+
     return hospitalCallId;
   }
 
@@ -229,6 +240,31 @@ export class HospitalCallDetector {
             await storage.updateHospitalCall(hospitalCallId, {
               transcriptCount: updatedSegments.filter(s => s.transcript && s.transcript !== 'Transcription pending...').length
             });
+
+            // Update incident tracker after transcription
+            try {
+              const hospitalCall = await storage.getHospitalCall(hospitalCallId);
+              if (hospitalCall) {
+                // Update hospital call with full transcript
+                const allTranscripts = updatedSegments
+                  .filter(s => s.transcript && s.transcript !== 'Transcription pending...')
+                  .map(s => s.transcript)
+                  .join(' ');
+                
+                await storage.updateHospitalCall(hospitalCallId, {
+                  transcript: allTranscripts
+                });
+                
+                // Get updated hospital call with transcript
+                const updatedHospitalCall = await storage.getHospitalCall(hospitalCallId);
+                if (updatedHospitalCall) {
+                  const { incidentTracker } = await import('./incident-tracker');
+                  await incidentTracker.updateIncidentFromHospitalCall(updatedHospitalCall);
+                }
+              }
+            } catch (error) {
+              console.error('Error updating incident after transcription:', error);
+            }
 
             console.log(`Automatic transcription completed for hospital segment ${audioSegmentId}`);
           }

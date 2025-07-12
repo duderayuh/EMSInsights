@@ -314,9 +314,9 @@ export default function IncidentsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {incident.etaEstimated ? (
+                      {incident.estimatedETA ? (
                         <div>
-                          <span>{incident.etaEstimated} min</span>
+                          <span>{incident.estimatedETA} min</span>
                           {(incident as any).distanceToHospital && (
                             <div className="text-xs text-gray-500">Drive time</div>
                           )}

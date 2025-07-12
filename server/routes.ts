@@ -883,8 +883,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           await unitExtractor.tagCallWithUnits(call.id, call.transcript);
           console.log(`Unit extraction completed for manually created call ${call.id}`);
+          
+          // Create incident for dispatch calls
+          await incidentTracker.processNewCall(call);
+          console.log(`Incident tracking processed for manually created call ${call.id}`);
         } catch (error) {
-          console.error(`Error extracting units for call ${call.id}:`, error);
+          console.error(`Error extracting units/creating incident for call ${call.id}:`, error);
         }
       }
       

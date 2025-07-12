@@ -114,6 +114,16 @@ EMS-Insight is a real-time emergency dispatch monitoring system designed to proc
 
 ```
 Changelog:
+- July 12, 2025: Project Organization & Complete Unit System Setup
+  - **PROJECT CLEANUP**: Organized all one-time fix scripts into `scripts/one-time-fixes/` directory
+  - Moved 47 utility scripts (fix-*, test-*, debug-*, reclassify-*, etc.) out of root directory
+  - Created comprehensive documentation in `scripts/one-time-fixes/README.md`
+  - **COMPLETE UNIT SYSTEM**: Added comprehensive 990 unit tags covering all emergency unit types 1-99
+  - Unit types: Engine, Medic, Ambulance, EMS, Ladder, Truck, Squad, Battalion, Chief, Rescue
+  - Each unit type now has complete 1-99 coverage for Indianapolis EMS dispatch operations
+  - Clean project structure now only contains core application files in root directory
+  - System ready for deployment with organized codebase and complete unit recognition
+
 - July 12, 2025: Database Reset for Clean Deployment
   - **CLEAN SLATE**: Cleared all emergency call data (14,068 calls), incidents (421), hospital conversations (453), and audio segments (14,679)
   - Reset last processed ID to 0 for fresh start from beginning

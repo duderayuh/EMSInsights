@@ -368,7 +368,7 @@ export const incidents = pgTable("incidents", {
   etaVariance: integer("eta_variance"), // difference in minutes
   
   // Status tracking
-  status: text("status").default("dispatched"), // 'dispatched', 'en_route', 'arrived', 'completed'
+  status: text("status").default("dispatched"), // 'dispatched', 'en_route', 'arrived', 'arriving_shortly', 'completed'
   matchStatus: text("match_status"), // 'matched', 'unmatched', 'manual'
   
   // Geographic data

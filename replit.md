@@ -132,6 +132,12 @@ Changelog:
   - Enhanced incident display to show hospital destination and calculated ETA columns
   - System broadcasts incident updates via WebSocket for real-time dashboard updates
   - Complete automation: Unit gets dispatched → Unit calls hospital → Status changes to "en_route" with ETA
+  - **TIME-BASED STATUS TRANSITIONS**: Implemented automatic status progression based on ETA
+    - Created incident-status-monitor.ts service that runs every 30 seconds
+    - When current time reaches (dispatch time + estimated ETA) → status changes to "arriving_shortly"
+    - 10 minutes after ETA → status changes to "completed"
+    - Added new "arriving_shortly" status with indigo color coding in UI
+    - System automatically manages incident lifecycle from dispatch to completion
 
 - July 12, 2025: Phase 113 completion - Enhanced Audio Error Handling & Database Rotation Feedback
   - **AUDIO UNAVAILABILITY DIAGNOSIS**: Identified root cause of audio playback issues in deployed app

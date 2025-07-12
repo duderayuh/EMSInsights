@@ -121,8 +121,10 @@ export default function IncidentsPage() {
   const statusColors = {
     dispatched: "bg-yellow-500/20 text-yellow-600",
     enroute: "bg-blue-500/20 text-blue-600",
+    en_route: "bg-blue-500/20 text-blue-600",
     on_scene: "bg-orange-500/20 text-orange-600",
     transporting: "bg-purple-500/20 text-purple-600",
+    arriving_shortly: "bg-indigo-500/20 text-indigo-600",
     at_hospital: "bg-green-500/20 text-green-600",
     completed: "bg-gray-500/20 text-gray-600"
   };
@@ -130,8 +132,10 @@ export default function IncidentsPage() {
   const statusLabels = {
     dispatched: "Dispatched",
     enroute: "En Route",
+    en_route: "En Route",
     on_scene: "On Scene",
     transporting: "Transporting",
+    arriving_shortly: "Arriving Shortly",
     at_hospital: "At Hospital",
     completed: "Completed"
   };

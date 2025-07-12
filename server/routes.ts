@@ -220,6 +220,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize audio processing pipeline
   initializeAudioPipeline();
 
+  // Start incident status monitor
+  const { incidentStatusMonitor } = await import('./services/incident-status-monitor');
+  incidentStatusMonitor.start();
+  console.log('Incident status monitor started');
+
   // Authentication routes (no auth required)
   app.post("/api/auth/login", async (req, res) => {
     try {

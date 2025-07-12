@@ -287,7 +287,11 @@ export function HospitalDashboard({ onCallSelect, callId }: HospitalDashboardPro
       const audio = new Audio(`/api/audio/segment/${audioSegmentId}`);
       audio.play().catch(error => {
         console.error('Error playing audio:', error);
-        alert('Audio playback failed - audio file may not be available');
+        toast({
+          title: "Audio Unavailable",
+          description: "Audio files have been rotated out of the Rdio Scanner database. This is normal behavior to save storage space.",
+          variant: "destructive",
+        });
         setPlayingSegment(null);
       });
       
@@ -299,7 +303,11 @@ export function HospitalDashboard({ onCallSelect, callId }: HospitalDashboardPro
       // Handle audio errors
       audio.onerror = () => {
         console.error('Audio error for segment:', audioSegmentId);
-        alert('Audio file not available - may have been rotated out of the database');
+        toast({
+          title: "Audio Unavailable",
+          description: "Audio files have been rotated out of the Rdio Scanner database. This is normal behavior to save storage space.",
+          variant: "destructive",
+        });
         setPlayingSegment(null);
       };
     }

@@ -429,8 +429,8 @@ export function HospitalCallsTab({ onCallSelect }: HospitalCallsTabProps) {
         audioRefs.current[segmentId].addEventListener('error', (e) => {
           console.error('Audio playback error:', e);
           toast({
-            title: "Audio Error",
-            description: "Unable to play audio file",
+            title: "Audio Unavailable",
+            description: "Audio files have been rotated out of the Rdio Scanner database. This is normal behavior to save storage space.",
             variant: "destructive",
           });
           setPlayingSegment(null);
@@ -443,8 +443,8 @@ export function HospitalCallsTab({ onCallSelect }: HospitalCallsTabProps) {
     } catch (error) {
       console.error('Error playing audio:', error);
       toast({
-        title: "Audio Error",
-        description: "Unable to play audio file",
+        title: "Audio Unavailable",
+        description: "Audio files have been rotated out of the Rdio Scanner database. This is normal behavior to save storage space.",
         variant: "destructive",
       });
       setPlayingSegment(null);

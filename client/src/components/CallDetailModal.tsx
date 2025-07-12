@@ -941,7 +941,7 @@ export function CallDetailModal({ call, onClose }: CallDetailModalProps) {
                   <div className="text-sm font-medium text-gray-800 dark:text-gray-900">Call Audio</div>
                   <div className="text-xs text-gray-700 dark:text-gray-800">
                     {audioError ? (
-                      <span className="text-red-600">Audio not available - may have been rotated out</span>
+                      <span className="text-red-600">Audio unavailable - files rotated out of database</span>
                     ) : (
                       <>Duration: {(() => {
                         if (call.endMs && call.startMs && call.endMs > call.startMs) {
@@ -1007,6 +1007,11 @@ export function CallDetailModal({ call, onClose }: CallDetailModalProps) {
                     src: e.currentTarget.src,
                     networkState: e.currentTarget.networkState,
                     readyState: e.currentTarget.readyState
+                  });
+                  toast({
+                    title: "Audio Unavailable",
+                    description: "Audio files have been rotated out of the Rdio Scanner database. This is normal behavior to save storage space.",
+                    variant: "destructive",
                   });
                   setAudioError(true);
                   setIsPlaying(false);

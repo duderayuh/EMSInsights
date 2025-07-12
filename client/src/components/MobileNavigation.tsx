@@ -34,19 +34,19 @@ export function MobileNavigation({ user, unreadAlertsCount = 0 }: MobileNavigati
       href: "/hospital-calls",
       label: "Hospital Calls",
       icon: Building2,
-      show: hasAdminAccess
+      show: true
     },
     {
       href: "/analytics",
       label: "Analytics",
       icon: BarChart3,
-      show: hasAdminAccess
+      show: true
     },
     {
       href: "/public-health",
       label: "Public Health",
       icon: Heart,
-      show: hasAdminAccess
+      show: true
     },
     {
       href: "/alert-management",

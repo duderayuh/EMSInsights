@@ -212,12 +212,12 @@ export default function Dashboard() {
         }
       }}>
         <div className="border-b border-border bg-gray-50 dark:bg-gray-800 px-6">
-          <TabsList className={`grid w-[900px] ${isAdmin ? 'grid-cols-5' : 'grid-cols-2'}`}>
+          <TabsList className="grid w-[900px] grid-cols-5">
             <TabsTrigger value="dashboard">Dispatch</TabsTrigger>
-            {hasAdminAccess && <TabsTrigger value="hospital">EMS-Hospital Calls</TabsTrigger>}
+            <TabsTrigger value="hospital">EMS-Hospital Calls</TabsTrigger>
             <TabsTrigger value="incidents">Unit Tracking</TabsTrigger>
-            {hasAdminAccess && <TabsTrigger value="analytics">Analytics</TabsTrigger>}
-            {hasAdminAccess && <TabsTrigger value="public-health">Public Health</TabsTrigger>}
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="public-health">Public Health</TabsTrigger>
           </TabsList>
         </div>
         

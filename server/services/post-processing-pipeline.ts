@@ -197,7 +197,7 @@ export class PostProcessingPipeline {
     }
 
     // Step 6: Extract call type (basic extraction, NLP classifier will do detailed work)
-    const extractedCallType = this.extractBasicCallType(cleanedTranscript);
+    const extractedCallType = await this.extractBasicCallType(cleanedTranscript);
 
     return {
       cleanedTranscript,
@@ -413,35 +413,21 @@ export class PostProcessingPipeline {
     return cleaned;
   }
 
-  private extractBasicCallType(transcript: string): string | undefined {
+  private async extractBasicCallType(transcript: string): Promise<string | undefined> {
     const text = transcript.toLowerCase();
     
-    // Common call type patterns in dispatch audio
-    const callTypePatterns: [RegExp, string][] = [
-      [/cardiac arrest/i, 'Cardiac Arrest'],
-      [/chest pain/i, 'Chest Pain/Heart'],
-      [/difficulty breathing/i, 'Difficulty Breathing'],
-      [/seizure/i, 'Seizure'],
-      [/unconscious/i, 'Unconscious Person'],
-      [/overdose/i, 'Overdose'],
-      [/mvc|motor vehicle|vehicle accident/i, 'Vehicle Accident'],
-      [/assault/i, 'Assault'],
-      [/gsw|gunshot/i, 'Gunshot Wound'],
-      [/fire/i, 'Fire'],
-      [/sick person/i, 'Sick Person'],
-      [/mental|emotional|psychiatric/i, 'Mental/Emotional'],
-      [/diabetic/i, 'Diabetic'],
-      [/bleeding/i, 'Bleeding'],
-      [/fall/i, 'Fall'],
-      [/trauma/i, 'Trauma'],
-    ];
-
-    for (const [pattern, callType] of callTypePatterns) {
-      if (pattern.test(text)) {
-        return callType;
+    try {
+      // Use the NLP classifier which now loads from database
+      const classifier = await import('./nlp-classifier');
+      const result = await classifier.nlpClassifier.classify(transcript);
+      
+      if (result.callType && result.callType !== 'Unknown') {
+        return result.callType;
       }
+    } catch (error) {
+      console.error('Error using NLP classifier in post-processing:', error);
     }
-
+    
     return undefined;
   }
 

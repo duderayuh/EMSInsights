@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { incidents } from '@shared/schema';
-import { eq, and, or, lte, gte, ne, sql, isNotNull } from 'drizzle-orm';
+import { eq, and, or, lte, gte, ne, sql } from 'drizzle-orm';
 import type { Incident } from '@shared/schema';
 
 export class IncidentStatusMonitor {
@@ -33,10 +33,7 @@ export class IncidentStatusMonitor {
       
       // Find incidents that are en_route and have an estimated ETA
       const enRouteIncidents = await db.select().from(incidents)
-        .where(and(
-          eq(incidents.status, 'en_route'),
-          sql`${incidents.estimatedETA} IS NOT NULL`
-        ));
+        .where(eq(incidents.status, 'en_route'));
 
       for (const incident of enRouteIncidents) {
         if (!incident.dispatchTime || !incident.estimatedETA) continue;
@@ -55,10 +52,7 @@ export class IncidentStatusMonitor {
 
       // Find incidents that are arriving_shortly and should be completed
       const arrivingIncidents = await db.select().from(incidents)
-        .where(and(
-          eq(incidents.status, 'arriving_shortly'),
-          sql`${incidents.estimatedETA} IS NOT NULL`
-        ));
+        .where(eq(incidents.status, 'arriving_shortly'));
 
       for (const incident of arrivingIncidents) {
         if (!incident.dispatchTime || !incident.estimatedETA) continue;

@@ -1,6 +1,6 @@
 import { db } from './db';
-import { calls } from '@shared/schema';
-import { sql, inArray } from 'drizzle-orm';
+import { calls, callTypes } from '@shared/schema';
+import { sql, inArray, eq, and, gte } from 'drizzle-orm';
 import { format, subDays } from 'date-fns';
 
 export interface TrendData {
@@ -54,21 +54,77 @@ const PUBLIC_HEALTH_DISPLAY_NAMES: Record<string, string> = {
 };
 
 export class AnalyticsService {
+  private publicHealthCallTypes: string[] = [];
+  private publicHealthDisplayNames: Record<string, string> = {};
+  private initialized = false;
+
+  private async initialize() {
+    if (this.initialized) return;
+    
+    try {
+      // Load public health call types from database
+      const publicHealthTypes = await db.select()
+        .from(callTypes)
+        .where(inArray(callTypes.name, [
+          'overdose', 'overdose b', 'overdose c',
+          'environmental',
+          'mental-emotional', 'mental-emotional b',
+          'injured person', 'injured person b', 'injured person c',
+          'ob/childbirth', 'ob/childbirth b'
+        ]));
+      
+      // Map call type names to display names
+      this.publicHealthCallTypes = publicHealthTypes.map(ct => ct.displayName);
+      this.publicHealthDisplayNames = {};
+      
+      for (const ct of publicHealthTypes) {
+        // Use simplified display name for analytics
+        if (ct.displayName.includes('Overdose')) {
+          this.publicHealthDisplayNames[ct.displayName] = 'Overdose';
+        } else if (ct.displayName.includes('Environmental')) {
+          this.publicHealthDisplayNames[ct.displayName] = 'Environmental/Heat';
+        } else if (ct.displayName.includes('Mental-Emotional') || ct.displayName.includes('Mental/Emotional')) {
+          this.publicHealthDisplayNames[ct.displayName] = 'Mental Health';
+        } else if (ct.displayName.includes('Injured Person')) {
+          this.publicHealthDisplayNames[ct.displayName] = 'Injury/Gunshot';
+        } else if (ct.displayName.includes('OB/Childbirth')) {
+          this.publicHealthDisplayNames[ct.displayName] = 'OB/Childbirth';
+        }
+      }
+      
+      // Fallback to hardcoded if no call types found
+      if (this.publicHealthCallTypes.length === 0) {
+        this.publicHealthCallTypes = PUBLIC_HEALTH_CALL_TYPES;
+        this.publicHealthDisplayNames = PUBLIC_HEALTH_DISPLAY_NAMES;
+      }
+      
+      this.initialized = true;
+    } catch (error) {
+      console.error('Error loading public health call types:', error);
+      // Use hardcoded values as fallback
+      this.publicHealthCallTypes = PUBLIC_HEALTH_CALL_TYPES;
+      this.publicHealthDisplayNames = PUBLIC_HEALTH_DISPLAY_NAMES;
+      this.initialized = true;
+    }
+  }
+
   // Get chief complaint trends for specified days
   async getChiefComplaintTrends(days: number): Promise<TrendData[]> {
+    await this.initialize();
     const startDate = subDays(new Date(), days);
     
-    const trends = await db.execute(sql`
-      SELECT 
-        DATE_TRUNC('day', timestamp) as date,
-        call_type as chief_complaint,
-        COUNT(*) as count
-      FROM ${calls}
-      WHERE timestamp >= ${startDate.toISOString()}
-        AND call_type IN ('Overdose', 'Environmental', 'Mental-Emotional', 'Injured Person', 'OB/Childbirth')
-      GROUP BY DATE_TRUNC('day', timestamp), call_type
-      ORDER BY date DESC, count DESC
-    `);
+    const trends = await db.select({
+      date: sql<string>`DATE_TRUNC('day', ${calls.timestamp})`,
+      chiefComplaint: calls.callType,
+      count: sql<number>`COUNT(*)`
+    })
+    .from(calls)
+    .where(and(
+      gte(calls.timestamp, startDate),
+      inArray(calls.callType, this.publicHealthCallTypes)
+    ))
+    .groupBy(sql`DATE_TRUNC('day', ${calls.timestamp})`, calls.callType)
+    .orderBy(sql`date DESC`, sql`count DESC`);
 
     console.log('Analytics trends query result:', trends);
     
@@ -85,10 +141,11 @@ export class AnalyticsService {
 
   // Detect spikes in chief complaints using z-score method
   async detectSpikes(): Promise<SpikeAlert[]> {
+    await this.initialize();
     const alerts: SpikeAlert[] = [];
 
-    for (const callType of PUBLIC_HEALTH_CALL_TYPES) {
-      const displayName = PUBLIC_HEALTH_DISPLAY_NAMES[callType] || callType;
+    for (const callType of this.publicHealthCallTypes) {
+      const displayName = this.publicHealthDisplayNames[callType] || callType;
       
       // Get last 24 hours count
       const recentCount = await db.execute(sql`
@@ -137,26 +194,27 @@ export class AnalyticsService {
 
   // Get geographic clusters of calls
   async getGeoClusters(hours: number = 24): Promise<GeoCluster[]> {
-    const clusters = await db.execute(sql`
-      SELECT 
-        call_type as chief_complaint,
-        latitude,
-        longitude,
-        COUNT(*) as count
-      FROM ${calls}
-      WHERE timestamp >= ${subDays(new Date(), hours / 24).toISOString()}
-        AND latitude IS NOT NULL
-        AND longitude IS NOT NULL
-        AND call_type IN ('Overdose', 'Environmental', 'Mental-Emotional', 'Injured Person', 'OB/Childbirth')
-      GROUP BY call_type, latitude, longitude
-      HAVING COUNT(*) >= 2
-      ORDER BY count DESC
-      LIMIT 100
-    `);
+    await this.initialize();
+    const clusters = await db.select({
+      chiefComplaint: calls.callType,
+      latitude: calls.latitude,
+      longitude: calls.longitude,
+      count: sql<number>`COUNT(*)`
+    })
+    .from(calls)
+    .where(and(
+      gte(calls.timestamp, subDays(new Date(), hours / 24)),
+      sql`${calls.latitude} IS NOT NULL`,
+      sql`${calls.longitude} IS NOT NULL`,
+      inArray(calls.callType, this.publicHealthCallTypes)
+    ))
+    .groupBy(calls.callType, calls.latitude, calls.longitude)
+    .having(sql`COUNT(*) >= 2`)
+    .orderBy(sql`COUNT(*) DESC`)
+    .limit(100);
 
-    const clusterRows = Array.isArray(clusters) ? clusters : (clusters.rows || []);
-    return clusterRows.map(row => ({
-      chiefComplaint: PUBLIC_HEALTH_DISPLAY_NAMES[row.chief_complaint as string] || row.chief_complaint as string,
+    return clusters.map(row => ({
+      chiefComplaint: this.publicHealthDisplayNames[row.chiefComplaint] || row.chiefComplaint,
       latitude: Number(row.latitude),
       longitude: Number(row.longitude),
       count: Number(row.count)
@@ -165,33 +223,35 @@ export class AnalyticsService {
 
   // Get top complaints for a date range (filtered for public health categories)
   async getTopComplaints(days: number): Promise<Array<{ chiefComplaint: string; count: number; percentage: number }>> {
+    await this.initialize();
     const startDate = subDays(new Date(), days);
     
-    const totalCountResult = await db.execute(sql`
-      SELECT COUNT(*) as total
-      FROM ${calls}
-      WHERE timestamp >= ${startDate.toISOString()}
-        AND call_type IN ('Overdose', 'Environmental', 'Mental-Emotional', 'Injured Person', 'OB/Childbirth')
-    `);
+    const totalCountResult = await db.select({
+      total: sql<number>`COUNT(*)`
+    })
+    .from(calls)
+    .where(and(
+      gte(calls.timestamp, startDate),
+      inArray(calls.callType, this.publicHealthCallTypes)
+    ));
     
-    const totalRows = Array.isArray(totalCountResult) ? totalCountResult : (totalCountResult.rows || []);
-    const totalCount = Number(totalRows[0]?.total || 0);
+    const totalCount = Number(totalCountResult[0]?.total || 0);
 
-    const topComplaints = await db.execute(sql`
-      SELECT 
-        call_type as chief_complaint,
-        COUNT(*) as count
-      FROM ${calls}
-      WHERE timestamp >= ${startDate.toISOString()}
-        AND call_type IN ('Overdose', 'Environmental', 'Mental-Emotional', 'Injured Person', 'OB/Childbirth')
-      GROUP BY call_type
-      ORDER BY count DESC
-      LIMIT 10
-    `);
+    const topComplaints = await db.select({
+      chiefComplaint: calls.callType,
+      count: sql<number>`COUNT(*)`
+    })
+    .from(calls)
+    .where(and(
+      gte(calls.timestamp, startDate),
+      inArray(calls.callType, this.publicHealthCallTypes)
+    ))
+    .groupBy(calls.callType)
+    .orderBy(sql`COUNT(*) DESC`)
+    .limit(10);
 
-    const complaintRows = Array.isArray(topComplaints) ? topComplaints : (topComplaints.rows || []);
-    return complaintRows.map(row => ({
-      chiefComplaint: PUBLIC_HEALTH_DISPLAY_NAMES[row.chief_complaint as string] || row.chief_complaint as string,
+    return topComplaints.map(row => ({
+      chiefComplaint: this.publicHealthDisplayNames[row.chiefComplaint] || row.chiefComplaint,
       count: Number(row.count),
       percentage: totalCount > 0 ? parseFloat(((Number(row.count) / totalCount) * 100).toFixed(1)) : 0
     }));
@@ -199,23 +259,25 @@ export class AnalyticsService {
 
   // Generate public health summary
   async generateSummary(days: number = 7): Promise<PublicHealthSummary> {
+    await this.initialize();
     const startDate = subDays(new Date(), days);
     const endDate = new Date();
 
     const [totalCallsResult, topComplaints, spikeAlerts, recentClusters] = await Promise.all([
-      db.execute(sql`
-        SELECT COUNT(*) as total
-        FROM ${calls}
-        WHERE timestamp >= ${startDate.toISOString()}
-          AND call_type IN ('Overdose', 'Environmental', 'Mental-Emotional', 'Injured Person', 'OB/Childbirth')
-      `),
+      db.select({
+        total: sql<number>`COUNT(*)`
+      })
+      .from(calls)
+      .where(and(
+        gte(calls.timestamp, startDate),
+        inArray(calls.callType, this.publicHealthCallTypes)
+      )),
       this.getTopComplaints(days),
       this.detectSpikes(),
       this.getGeoClusters(24)
     ]);
 
-    const totalRows = Array.isArray(totalCallsResult) ? totalCallsResult : (totalCallsResult.rows || []);
-    const totalCalls = Number(totalRows[0]?.total || 0);
+    const totalCalls = Number(totalCallsResult[0]?.total || 0);
     
     return {
       totalCalls,

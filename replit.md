@@ -151,6 +151,18 @@ Changelog:
   - Call types integrate with NLP classifier for automatic emergency call categorization
   - Complete integration ready for deployment with full administrative control over call classifications
 
+- July 12, 2025: Phase 115 completion - Database Call Types Integration
+  - **COMPLETE DATABASE INTEGRATION**: Successfully replaced all hardcoded call types with database-driven system
+  - Replaced user's authoritative list of 57 call types into database as single source of truth
+  - Updated NLP classifier to dynamically load call types from database on startup
+  - Modified post-processing pipeline to use NLP classifier for call type extraction
+  - Updated analytics service to load public health call types from database
+  - Fixed SQL syntax errors (IS NOT NULL issues) in incident status monitor
+  - System now loads 57 call types from database including proper "Hospital-EMS Communications" naming
+  - All components (NLP, post-processing, analytics) now use database as single source of truth
+  - Eliminated call type inconsistencies across system - all components use same call type definitions
+  - Application successfully starts with all 57 database call types loaded and ready for processing
+
 - July 12, 2025: Phase 113 completion - Enhanced Audio Error Handling & Database Rotation Feedback
   - **AUDIO UNAVAILABILITY DIAGNOSIS**: Identified root cause of audio playback issues in deployed app
   - Rdio Scanner database investigation revealed 0 audio records (rdioScannerCalls table empty)

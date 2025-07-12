@@ -1,3 +1,8 @@
+import { db } from '../db';
+import { callTypes } from '@shared/schema';
+import type { CallType } from '@shared/schema';
+import { eq } from 'drizzle-orm';
+
 interface ClassificationResult {
   callType: string;
   keywords: string[];
@@ -16,14 +21,14 @@ interface KeywordConfig {
 }
 
 export class NLPClassifier {
-  private chiefComplaints: string[] = [];
+  private callTypesMap: Map<string, CallType> = new Map();
+  private callTypeNames: string[] = [];
   private keywords: KeywordConfig = {} as KeywordConfig;
   private locationPattern: RegExp;
   private indianapolisLocations: string[];
+  private initialized: Promise<void>;
 
   constructor() {
-    this.loadChiefComplaints();
-    this.loadKeywords();
     this.locationPattern =
       /\b\d+\s+[NSEW]?\s*\w+\s+(st|street|ave|avenue|rd|road|blvd|boulevard|way|drive|dr|lane|ln|ct|court|pl|place)\b/gi;
     this.indianapolisLocations = [
@@ -33,67 +38,55 @@ export class NLPClassifier {
       "college avenue", "washington street", "market street",
       "circle centre", "monument circle"
     ];
+    
+    // Initialize asynchronously
+    this.initialized = this.initialize();
   }
 
-  private loadChiefComplaints() {
-    // Load all chief complaints from your provided list
-    this.chiefComplaints = [
-      "abdominal pain",
-      "abdominal pain b",
-      "abdominal/back pain",
-      "abdominal/back pain b",
-      "allergic reaction",
-      "allergic reaction b",
-      "assault trauma",
-      "assault trauma a",
-      "assault trauma b",
-      "assault trauma c",
-      "assist person",
-      "assist person b",
-      "assist person c",
-      "bleeding",
-      "bleeding non-traumatic",
-      "bleeding non-traumatic b",
-      "cardiac arrest",
-      "chest pain/heart",
-      "diabetic",
-      "diabetic b",
-      "difficulty breathing",
-      "environmental",
-      "gunshot",
-      "gunshot wound",
-      "headache",
-      "injured person",
-      "injured person b",
-      "injured person c",
-      "mental/emotional",
-      "mental/emotional b",
-      "mental-emotional",
-      "mental-emotional b",
-      "ob/childbirth",
-      "ob/childbirth b",
-      "overdose",
-      "overdose b",
-      "overdose c",
-      "pediatric cardiac arrest",
-      "seizure",
-      "seizure b",
-      "sick person",
-      "sick person a",
-      "sick person b",
-      "sick person c",
-      "stroke/cva",
-      "trauma/mvc",
-      "trauma/mvc a",
-      "trauma/mvc b",
-      "trauma/mvc c",
-      "unconscious person",
-      "unconscious person b",
-      "vehicle accident",
-      "vehicle accident b",
-      "vehicle accident c",
-      "mass casualty"
+  private async initialize() {
+    await this.loadCallTypesFromDatabase();
+    this.loadKeywords();
+  }
+
+  private async loadCallTypesFromDatabase() {
+    try {
+      const activeCallTypes = await db.select()
+        .from(callTypes)
+        .where(eq(callTypes.active, true));
+      
+      // Clear existing maps
+      this.callTypesMap.clear();
+      this.callTypeNames = [];
+      
+      // Build maps for quick lookup
+      for (const callType of activeCallTypes) {
+        this.callTypesMap.set(callType.displayName.toLowerCase(), callType);
+        this.callTypeNames.push(callType.displayName.toLowerCase());
+      }
+      
+      console.log(`Loaded ${this.callTypeNames.length} call types from database`);
+    } catch (error) {
+      console.error('Error loading call types from database:', error);
+      // Fallback to a minimal set if database fails
+      this.loadFallbackCallTypes();
+    }
+  }
+
+  private loadFallbackCallTypes() {
+    // Minimal fallback if database is unavailable
+    const fallbackTypes = [
+      'Medical Emergency', 'Fire/Hazmat', 'Vehicle Accident', 
+      'Investigation', 'Hospital-EMS Communications'
     ];
+    
+    for (const typeName of fallbackTypes) {
+      this.callTypeNames.push(typeName.toLowerCase());
+    }
+  }
+
+  // Method to ensure initialization is complete before classification
+  async ensureInitialized() {
+    await this.initialized;
   }
 
   private loadKeywords() {
@@ -134,6 +127,8 @@ export class NLPClassifier {
     extractedData?: any,
     segmentId?: string
   ): Promise<ClassificationResult> {
+    // Ensure we're initialized before classifying
+    await this.ensureInitialized();
     const text = transcript.toLowerCase();
     const foundKeywords: string[] = [];
     let callType = "Unknown";
@@ -192,7 +187,7 @@ export class NLPClassifier {
             }
             break;
           case "hospital":
-            callType = "EMS-Hospital Communications";
+            callType = "Hospital-EMS Communications";
             break;
           case "investigation":
             callType = "Assist Person";
@@ -281,17 +276,12 @@ export class NLPClassifier {
   private extractChiefComplaint(transcript: string): string | null {
     const text = transcript.toLowerCase();
     
-    // Check each chief complaint from the list
-    for (const complaint of this.chiefComplaints) {
-      if (text.includes(complaint)) {
-        // Return the properly formatted complaint
-        return complaint.split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ')
-          .replace('/b', ' B')
-          .replace('/c', ' C')
-          .replace('/a', ' A')
-          .replace('/', '/');
+    // Check each call type from the database
+    for (const callTypeName of this.callTypeNames) {
+      if (text.includes(callTypeName)) {
+        // Get the proper display name from the map
+        const callType = this.callTypesMap.get(callTypeName);
+        return callType ? callType.displayName : null;
       }
     }
     
@@ -299,13 +289,12 @@ export class NLPClassifier {
     const forPattern = /for\s+([^,\.]+)/;
     const forMatch = text.match(forPattern);
     if (forMatch) {
-      const complaint = forMatch[1].trim();
-      // Check if it matches any known complaint
-      for (const knownComplaint of this.chiefComplaints) {
-        if (complaint.includes(knownComplaint)) {
-          return knownComplaint.split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
+      const complaint = forMatch[1].trim().toLowerCase();
+      // Check if it matches any known call type
+      for (const callTypeName of this.callTypeNames) {
+        if (complaint.includes(callTypeName)) {
+          const callType = this.callTypesMap.get(callTypeName);
+          return callType ? callType.displayName : null;
         }
       }
     }
@@ -361,27 +350,23 @@ export class NLPClassifier {
   }
 
   private formatCallType(callType: string): string {
-    // Ensure proper formatting of call types
-    const standardizedCallTypes = [
-      "Abdominal Pain", "Abdominal Pain B", "Abdominal/Back Pain", "Abdominal/Back Pain B",
-      "Allergic Reaction", "Allergic Reaction B", "Assist Person", "Assist Person B", "Assist Person C",
-      "Bleeding", "Bleeding Non-Traumatic", "Bleeding Non-Traumatic B", "Cardiac Arrest",
-      "Chest Pain/Heart", "Diabetic", "Diabetic B", "Difficulty Breathing", "Environmental",
-      "Gunshot", "Gunshot Wound", "Headache", "Injured Person", "Injured Person B", "Injured Person C",
-      "Mental/Emotional", "Mental/Emotional B", "Mental-Emotional", "Mental-Emotional B",
-      "OB/Childbirth", "OB/Childbirth B", "Overdose", "Overdose B", "Overdose C",
-      "Pediatric Cardiac Arrest", "Seizure", "Seizure B", "Sick Person", "Sick Person A",
-      "Sick Person B", "Sick Person C", "Stroke/CVA", "Unconscious Person", "Unconscious Person B",
-      "Vehicle Accident", "Vehicle Accident B", "Vehicle Accident C", "Mass Casualty",
-      "Medical Emergency", "Fire/Hazmat", "EMS-Hospital Communications", "Unknown Call Type"
-    ];
+    // Check if the call type exists in our database map
+    const lowerCallType = callType.toLowerCase();
+    const dbCallType = this.callTypesMap.get(lowerCallType);
     
-    // Find exact match or return as-is
-    const match = standardizedCallTypes.find(type => 
-      type.toLowerCase() === callType.toLowerCase()
-    );
+    if (dbCallType) {
+      return dbCallType.displayName;
+    }
     
-    return match || callType;
+    // If not found, check for partial matches
+    for (const [key, value] of this.callTypesMap.entries()) {
+      if (key.includes(lowerCallType) || lowerCallType.includes(key)) {
+        return value.displayName;
+      }
+    }
+    
+    // Return the original if no match found
+    return callType;
   }
 
   private async generateEmbedding(text: string): Promise<number[] | null> {

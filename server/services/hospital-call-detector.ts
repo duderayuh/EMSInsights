@@ -127,7 +127,7 @@ export class HospitalCallDetector {
       sorDetected: false,
       sorPhysician: null,
       transcriptCount: 0,
-      callType: 'Hospital Communication'
+      callType: 'EMS-Hospital Communications'
     });
 
     return hospitalCall.id;

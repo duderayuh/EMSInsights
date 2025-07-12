@@ -365,6 +365,11 @@ export class RdioDatabaseMonitor extends EventEmitter {
       // Classify voice type based on talkgroup
       const voiceType = VoiceTypeClassifier.classifyVoiceType(talkgroupStr);
 
+      // Determine initial call type based on talkgroup
+      const initialCallType = isHospitalTalkgroup(talkgroupStr) 
+        ? "EMS-Hospital Communications" 
+        : "Emergency Dispatch";
+
       // Create preliminary call record with Rdio Scanner metadata
       const callRecord = await storage.createCall({
         timestamp: new Date(), // Processing timestamp
@@ -374,7 +379,7 @@ export class RdioDatabaseMonitor extends EventEmitter {
         confidence: 0,
         startMs: 0,
         endMs: 0,
-        callType: "Emergency Dispatch",
+        callType: initialCallType,
         status: "active",
         location: "",
         talkgroup: call.talkgroup.toString(),

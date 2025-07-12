@@ -114,6 +114,12 @@ EMS-Insight is a real-time emergency dispatch monitoring system designed to proc
 
 ```
 Changelog:
+- July 12, 2025: EMS-Hospital Communications Call Type Standardization
+  - Updated hospital-call-detector.ts to use "EMS-Hospital Communications" instead of "Hospital Communication"
+  - Modified rdio-database-monitor.ts to automatically assign "EMS-Hospital Communications" call type for hospital talkgroups
+  - Ensures all calls from hospital talkgroups (10256=Methodist, 10257=Riley, 10261=Eskenazi, etc.) are properly labeled
+  - System now consistently uses "EMS-Hospital Communications" for all hospital-related calls
+
 - July 12, 2025: Phase 113 completion - Enhanced Audio Error Handling & Database Rotation Feedback
   - **AUDIO UNAVAILABILITY DIAGNOSIS**: Identified root cause of audio playback issues in deployed app
   - Rdio Scanner database investigation revealed 0 audio records (rdioScannerCalls table empty)

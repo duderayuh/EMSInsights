@@ -236,7 +236,7 @@ export class TranscriptionRetryService {
         // Get audio data from Rdio Scanner database
         const audioQuery = rdioDb.prepare(`
           SELECT audio, audioType 
-          FROM calls 
+          FROM rdioScannerCalls 
           WHERE id = ?
         `);
         

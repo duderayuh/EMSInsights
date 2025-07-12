@@ -3804,6 +3804,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Call Types API Routes
+  app.get('/api/call-types', async (req, res) => {
+    try {
+      const callTypes = await storage.getCallTypes();
+      res.json(callTypes);
+    } catch (error) {
+      console.error('Error fetching call types:', error);
+      res.status(500).json({ error: 'Failed to fetch call types' });
+    }
+  });
+
+  app.get('/api/call-types/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const callType = await storage.getCallType(id);
+      if (!callType) {
+        return res.status(404).json({ error: 'Call type not found' });
+      }
+      res.json(callType);
+    } catch (error) {
+      console.error('Error fetching call type:', error);
+      res.status(500).json({ error: 'Failed to fetch call type' });
+    }
+  });
+
+  app.post('/api/call-types', requireAuth, async (req, res) => {
+    try {
+      const callTypeData = req.body;
+      const userId = req.user?.id || 1;
+      
+      const callType = await storage.createCallType({
+        ...callTypeData,
+        updatedBy: userId.toString()
+      });
+      res.json(callType);
+    } catch (error) {
+      console.error('Error creating call type:', error);
+      res.status(500).json({ error: 'Failed to create call type' });
+    }
+  });
+
+  app.put('/api/call-types/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      const userId = req.user?.id || 1;
+      
+      const callType = await storage.updateCallType(id, {
+        ...updates,
+        updatedBy: userId.toString()
+      });
+      if (!callType) {
+        return res.status(404).json({ error: 'Call type not found' });
+      }
+      res.json(callType);
+    } catch (error) {
+      console.error('Error updating call type:', error);
+      res.status(500).json({ error: 'Failed to update call type' });
+    }
+  });
+
+  app.delete('/api/call-types/:id', requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteCallType(id);
+      if (!success) {
+        return res.status(404).json({ error: 'Call type not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting call type:', error);
+      res.status(500).json({ error: 'Failed to delete call type' });
+    }
+  });
+
   // Transcription Dictionary API Routes
   app.get('/api/transcription-dictionary', async (req, res) => {
     try {

@@ -139,6 +139,18 @@ Changelog:
     - Added new "arriving_shortly" status with indigo color coding in UI
     - System automatically manages incident lifecycle from dispatch to completion
 
+- July 12, 2025: Phase 114 completion - Call Types Management System Full Implementation
+  - **COMPLETE CALL TYPES MANAGEMENT**: Successfully implemented comprehensive call types management system
+  - Created PostgreSQL call_types table with name, display_name, keywords, category, color, icon, and active fields
+  - Added complete CRUD API endpoints: GET /api/call-types, POST /api/call-types, PUT /api/call-types/:id, DELETE /api/call-types/:id
+  - Implemented full frontend UI in Settings page with Call Types tab featuring table display and add/edit/delete functionality
+  - Pre-populated database with 16 default call types covering all emergency scenarios
+  - Categories include: medical, fire, trauma, investigation, hospital with appropriate icons and colors
+  - Special enforcement: "EMS-Hospital Communications" call type for all hospital talkgroup calls
+  - System now allows administrators to manage, edit, and customize emergency call type classifications
+  - Call types integrate with NLP classifier for automatic emergency call categorization
+  - Complete integration ready for deployment with full administrative control over call classifications
+
 - July 12, 2025: Phase 113 completion - Enhanced Audio Error Handling & Database Rotation Feedback
   - **AUDIO UNAVAILABILITY DIAGNOSIS**: Identified root cause of audio playback issues in deployed app
   - Rdio Scanner database investigation revealed 0 audio records (rdioScannerCalls table empty)

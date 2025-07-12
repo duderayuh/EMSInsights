@@ -2,7 +2,7 @@ import { db } from './db';
 import { 
   calls, audioSegments, callStats, systemHealth, users, hospitalCalls, hospitalCallSegments,
   systemSettings, customHospitals, customTalkgroups, transcriptionDictionary,
-  alerts, alertRules, userAlertPreferences, unitTags, callUnitTags, incidents,
+  alerts, alertRules, userAlertPreferences, unitTags, callUnitTags, incidents, callTypes,
   type Call, type InsertCall, type AudioSegment, type InsertAudioSegment,
   type CallStats, type InsertCallStats, type SystemHealth, type InsertSystemHealth,
   type User, type InsertUser, type HospitalCall, type InsertHospitalCall,
@@ -12,7 +12,7 @@ import {
   type Alert, type InsertAlert, type AlertRule, type InsertAlertRule,
   type UserAlertPreferences, type InsertUserAlertPreferences,
   type UnitTag, type InsertUnitTag, type CallUnitTag, type InsertCallUnitTag,
-  type Incident, type InsertIncident
+  type Incident, type InsertIncident, type CallType, type InsertCallType
 } from '@shared/schema';
 import { eq, desc, like, and, or, gte, lte, sql, inArray, count, notInArray } from 'drizzle-orm';
 import type { IStorage } from './storage';
@@ -1122,6 +1122,62 @@ export class DatabaseStorage implements IStorage {
       .from(incidents)
       .where(eq(incidents.transcriptDispatchId, callId));
     return incident;
+  }
+
+  // Call Types Methods
+  async getCallTypes(): Promise<CallType[]> {
+    return await db.select()
+      .from(callTypes)
+      .orderBy(callTypes.category, callTypes.displayName);
+  }
+
+  async getActiveCallTypes(): Promise<CallType[]> {
+    return await db.select()
+      .from(callTypes)
+      .where(eq(callTypes.active, true))
+      .orderBy(callTypes.category, callTypes.displayName);
+  }
+
+  async getCallType(id: number): Promise<CallType | undefined> {
+    const [callType] = await db.select()
+      .from(callTypes)
+      .where(eq(callTypes.id, id));
+    return callType;
+  }
+
+  async getCallTypeByName(name: string): Promise<CallType | undefined> {
+    const [callType] = await db.select()
+      .from(callTypes)
+      .where(eq(callTypes.name, name));
+    return callType;
+  }
+
+  async createCallType(data: InsertCallType): Promise<CallType> {
+    const [newCallType] = await db.insert(callTypes)
+      .values(data)
+      .returning();
+    return newCallType;
+  }
+
+  async updateCallType(id: number, updates: Partial<CallType>): Promise<CallType | undefined> {
+    const cleanedUpdates = { ...updates };
+    delete cleanedUpdates.id;
+    delete cleanedUpdates.createdAt;
+    
+    const [updated] = await db.update(callTypes)
+      .set({
+        ...cleanedUpdates,
+        updatedAt: new Date()
+      })
+      .where(eq(callTypes.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCallType(id: number): Promise<boolean> {
+    const result = await db.delete(callTypes)
+      .where(eq(callTypes.id, id));
+    return !!result;
   }
 
   async getIncidentByHospitalCall(hospitalCallId: number): Promise<Incident | undefined> {

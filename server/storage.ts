@@ -1,6 +1,6 @@
 import { 
   calls, audioSegments, callStats, systemHealth, users, hospitalCalls, hospitalCallSegments,
-  alerts, alertRules, userAlertPreferences, unitTags, callUnitTags, incidents,
+  alerts, alertRules, userAlertPreferences, unitTags, callUnitTags, incidents, callTypes,
   type Call, type InsertCall, type AudioSegment, type InsertAudioSegment,
   type CallStats, type InsertCallStats, type SystemHealth, type InsertSystemHealth,
   type User, type InsertUser, type HospitalCall, type InsertHospitalCall,
@@ -8,7 +8,7 @@ import {
   type Alert, type InsertAlert, type AlertRule, type InsertAlertRule,
   type UserAlertPreferences, type InsertUserAlertPreferences,
   type UnitTag, type InsertUnitTag, type CallUnitTag, type InsertCallUnitTag,
-  type Incident, type InsertIncident
+  type Incident, type InsertIncident, type CallType, type InsertCallType
 } from '@shared/schema';
 import { eq, desc, like, and, gte, lte, sql } from 'drizzle-orm';
 
@@ -112,6 +112,15 @@ export interface IStorage {
   getIncidentByDispatchCall(callId: number): Promise<Incident | undefined>;
   getIncidentByHospitalCall(hospitalCallId: number): Promise<Incident | undefined>;
   getIncidentsByTimeRange(startTime: Date, endTime: Date): Promise<Incident[]>;
+  
+  // Call Types
+  getCallTypes(): Promise<CallType[]>;
+  getActiveCallTypes(): Promise<CallType[]>;
+  getCallType(id: number): Promise<CallType | undefined>;
+  getCallTypeByName(name: string): Promise<CallType | undefined>;
+  createCallType(data: InsertCallType): Promise<CallType>;
+  updateCallType(id: number, updates: Partial<CallType>): Promise<CallType | undefined>;
+  deleteCallType(id: number): Promise<boolean>;
 }
 
 interface SearchParams {

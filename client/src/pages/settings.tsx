@@ -10,7 +10,7 @@ import { Trash2, Edit3, Plus, Save, X, Upload, Settings, MapPin, Radio, FileText
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import type { SystemSetting, CustomHospital, CustomTalkgroup, TranscriptionDictionary, UnitTag } from '@shared/schema';
+import type { SystemSetting, CustomHospital, CustomTalkgroup, TranscriptionDictionary, UnitTag, CallType } from '@shared/schema';
 import { Link } from 'wouter';
 
 interface EditFormData {
@@ -74,6 +74,12 @@ export default function SettingsPage() {
   const { data: unitTags = [], isLoading: unitTagsLoading } = useQuery<UnitTag[]>({
     queryKey: ['/api/unit-tags'],
     enabled: activeTab === 'unittags'
+  });
+  
+  // Fetch call types
+  const { data: callTypes = [], isLoading: callTypesLoading } = useQuery<CallType[]>({
+    queryKey: ['/api/call-types'],
+    enabled: activeTab === 'calltypes'
   });
 
   // Update setting mutation
@@ -763,6 +769,74 @@ export default function SettingsPage() {
     </div>
   );
 
+  const renderCallTypes = () => (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Call Types Management</h3>
+        <Button onClick={() => setEditingItem({ type: 'call-types' })}>
+          <Plus className="h-4 w-4 mr-1" />
+          Add Call Type
+        </Button>
+      </div>
+      
+      <div className="grid gap-4">
+        {callTypes.map((callType: CallType) => (
+          <Card key={callType.id} className="bg-gray-50 dark:bg-gray-800/50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+                      {callType.displayName}
+                    </h4>
+                    <code className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                      {callType.name}
+                    </code>
+                    {callType.category && (
+                      <Badge variant="secondary" className={categoryColors[callType.category] || categoryColors.system}>
+                        {callType.category}
+                      </Badge>
+                    )}
+                    {!callType.active && (
+                      <Badge variant="secondary" className="bg-gray-200 text-gray-600">
+                        Inactive
+                      </Badge>
+                    )}
+                  </div>
+                  {callType.keywords && callType.keywords.length > 0 && (
+                    <div className="mb-2">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Keywords: </span>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        {callType.keywords.join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {callType.color && (
+                    <div className="flex items-center space-x-2 text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">Color:</span>
+                      <div 
+                        className="w-6 h-6 rounded border border-gray-300"
+                        style={{ backgroundColor: callType.color }}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="flex space-x-2">
+                  <Button variant="outline" size="sm" onClick={() => handleEdit(callType, 'call-types')}>
+                    <Edit3 className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleDelete(callType.id, 'call-types')}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+
   const renderTranscription = () => (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -1105,6 +1179,90 @@ export default function SettingsPage() {
               </>
             )}
 
+            {type === 'call-types' && (
+              <>
+                <div>
+                  <Label htmlFor="name" className="text-gray-900 dark:text-gray-100">Internal Name</Label>
+                  <Input
+                    id="name"
+                    value={formData.name || ''}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="medical-emergency"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="displayName" className="text-gray-900 dark:text-gray-100">Display Name</Label>
+                  <Input
+                    id="displayName"
+                    value={formData.displayName || ''}
+                    onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
+                    placeholder="Medical Emergency"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="keywords" className="text-gray-900 dark:text-gray-100">Keywords (comma-separated)</Label>
+                  <Input
+                    id="keywords"
+                    value={formData.keywords?.join(', ') || ''}
+                    onChange={(e) => setFormData({ ...formData, keywords: e.target.value.split(',').map(k => k.trim()).filter(k => k) })}
+                    placeholder="medical, emergency, patient, unconscious"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="category" className="text-gray-900 dark:text-gray-100">Category</Label>
+                  <Select 
+                    value={formData.category || ''} 
+                    onValueChange={(value) => setFormData({ ...formData, category: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="medical">Medical</SelectItem>
+                      <SelectItem value="fire">Fire</SelectItem>
+                      <SelectItem value="trauma">Trauma</SelectItem>
+                      <SelectItem value="investigation">Investigation</SelectItem>
+                      <SelectItem value="hospital">Hospital</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="color" className="text-gray-900 dark:text-gray-100">Color</Label>
+                  <Input
+                    id="color"
+                    type="color"
+                    value={formData.color || '#3B82F6'}
+                    onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="icon" className="text-gray-900 dark:text-gray-100">Icon (emoji or icon name)</Label>
+                  <Input
+                    id="icon"
+                    value={formData.icon || ''}
+                    onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
+                    placeholder="🚑 or ambulance"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="active" className="text-gray-900 dark:text-gray-100">Status</Label>
+                  <Select 
+                    value={formData.active !== false ? 'true' : 'false'} 
+                    onValueChange={(value) => setFormData({ ...formData, active: value === 'true' })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="true">Active</SelectItem>
+                      <SelectItem value="false">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
             <div className="flex justify-end space-x-2 pt-4">
               <Button variant="outline" onClick={handleCancel}>
                 <X className="h-4 w-4 mr-1" />
@@ -1140,7 +1298,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1 h-auto">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1 h-auto">
           <TabsTrigger value="general" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3">
             <Settings className="h-4 w-4" />
             <span className="text-xs sm:text-sm">General</span>
@@ -1148,6 +1306,10 @@ export default function SettingsPage() {
           <TabsTrigger value="talkgroups" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3">
             <Radio className="h-4 w-4" />
             <span className="text-xs sm:text-sm">Talkgroups & Hospitals</span>
+          </TabsTrigger>
+          <TabsTrigger value="calltypes" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3">
+            <FileText className="h-4 w-4" />
+            <span className="text-xs sm:text-sm">Call Types</span>
           </TabsTrigger>
           <TabsTrigger value="exports" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3">
             <FileText className="h-4 w-4" />
@@ -1180,6 +1342,14 @@ export default function SettingsPage() {
             <div className="text-center py-8">Loading talkgroups and hospitals...</div>
           ) : (
             renderTalkgroupsAndHospitals()
+          )}
+        </TabsContent>
+        
+        <TabsContent value="calltypes">
+          {callTypesLoading ? (
+            <div className="text-center py-8">Loading call types...</div>
+          ) : (
+            renderCallTypes()
           )}
         </TabsContent>
 

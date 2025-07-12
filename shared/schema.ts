@@ -349,6 +349,30 @@ export type InsertUnitTag = z.infer<typeof insertUnitTag>;
 export type CallUnitTag = typeof callUnitTags.$inferSelect;
 export type InsertCallUnitTag = z.infer<typeof insertCallUnitTag>;
 
+// Call Types Management
+export const callTypes = pgTable("call_types", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  displayName: text("display_name").notNull(),
+  keywords: text("keywords").array().default([]),
+  category: text("category"), // 'medical', 'fire', 'trauma', 'investigation', etc.
+  color: text("color"), // For UI display
+  icon: text("icon"), // Icon identifier for UI
+  active: boolean("active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedBy: text("updated_by")
+});
+
+export const insertCallType = createInsertSchema(callTypes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type CallType = typeof callTypes.$inferSelect;
+export type InsertCallType = z.infer<typeof insertCallType>;
+
 // Incidents table for tracking unit dispatch to hospital transport
 export const incidents = pgTable("incidents", {
   id: serial("id").primaryKey(),

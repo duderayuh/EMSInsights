@@ -497,10 +497,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteHospitalCall(id: number): Promise<boolean> {
-    const result = await db
-      .delete(hospitalCalls)
-      .where(eq(hospitalCalls.id, id));
-    return Array.isArray(result) && result.length > 0;
+    try {
+      // First check if the hospital call exists
+      const hospitalCall = await db.select().from(hospitalCalls).where(eq(hospitalCalls.id, id)).limit(1);
+      if (hospitalCall.length === 0) {
+        return false;
+      }
+      
+      // Delete related segments first
+      await db.delete(hospitalCallSegments).where(eq(hospitalCallSegments.hospitalCallId, id));
+      
+      // Delete the hospital call
+      await db.delete(hospitalCalls).where(eq(hospitalCalls.id, id));
+      return true;
+    } catch (error) {
+      console.error('Error deleting hospital call:', error);
+      return false;
+    }
   }
 
   // Hospital Call Segments

@@ -21,14 +21,22 @@ export class SORDetectionService {
     'physician authorization',
     'doctor authorization',
     'medical authorization',
-    'orders',
-    'any orders',
-    'orders at this time',
-    'questions or orders',
     'need orders',
+    'requesting orders',
     'physician orders',
     'doctor orders',
-    'medical orders'
+    'medical orders',
+    'orders requested',
+    'requesting medical orders',
+    'need physician orders'
+  ];
+  
+  // These are courtesy phrases, not actual SOR requests
+  private courtesyPhrases = [
+    'any questions or orders',
+    'questions or orders at this time',
+    'if you have any questions or orders',
+    'do you have any orders'
   ];
 
   private physicianTitles = [
@@ -58,6 +66,12 @@ export class SORDetectionService {
 
     const normalizedText = transcript.toLowerCase().trim();
     
+    // Check if this is just a courtesy phrase, not an actual SOR request
+    const isCourtesyPhrase = this.courtesyPhrases.some(phrase => normalizedText.includes(phrase));
+    if (isCourtesyPhrase) {
+      return { isSOR: false, confidence: 0.1, extractedText: 'Courtesy phrase detected' };
+    }
+    
     // Check for SOR keywords
     const sorMatch = this.checkSORKeywords(normalizedText);
     
@@ -73,18 +87,24 @@ export class SORDetectionService {
     }
 
     if (physicianName) {
-      confidence += 0.3; // Additional confidence for physician name
+      // Only count physician name if there's also an SOR keyword
+      if (sorMatch.found) {
+        confidence += 0.3; // Additional confidence for physician name
+      } else {
+        // Just mentioning a physician doesn't make it an SOR
+        confidence += 0.1;
+      }
     }
     
     // Check for EMS-to-hospital communication patterns
-    if (this.hasEMSHospitalContext(normalizedText)) {
-      isSOR = true; // Medical orders/communication in EMS context
-      confidence += 0.6;
+    // Only add to confidence if SOR keywords already found, don't trigger SOR by itself
+    if (sorMatch.found && this.hasEMSHospitalContext(normalizedText)) {
+      confidence += 0.2; // Small boost for proper context
     }
 
     // Adjust confidence based on context
-    if (this.hasHospitalContext(normalizedText)) {
-      confidence += 0.2;
+    if (isSOR && this.hasHospitalContext(normalizedText)) {
+      confidence += 0.1;
     }
 
     // Cap confidence at 1.0

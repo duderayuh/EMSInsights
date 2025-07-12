@@ -114,6 +114,16 @@ EMS-Insight is a real-time emergency dispatch monitoring system designed to proc
 
 ```
 Changelog:
+- July 12, 2025: CRITICAL FIX - Deployment-Safe Rdio Scanner Server Management
+  - **DEPLOYMENT ENVIRONMENT DETECTION**: Implemented deployment-aware Rdio Scanner server startup
+  - Enhanced rdio-scanner-manager.ts to detect deployment environments (REPLIT_DEPLOYMENT or NODE_ENV=production)
+  - In deployment environments, Rdio Scanner server gracefully skips startup without throwing errors
+  - Updated proxy routes to return helpful HTML page explaining service unavailability in deployment
+  - Fixed ECONNREFUSED errors on port 3001 by preventing connection attempts when server is unavailable
+  - Main EMS-Insight application continues to function normally even when Rdio Scanner is unavailable
+  - Improved user experience with clear messaging about deployment environment limitations
+  - System now handles both development (with Rdio Scanner) and deployment (without) environments seamlessly
+
 - July 12, 2025: CRITICAL FIX - Unit Display Database Query Resolution
   - **UNIT EXTRACTION FULLY OPERATIONAL WITH UI DISPLAY**: Fixed critical database query issue preventing units from appearing in UI
   - Root cause: Database storage methods (getCall, getRecentCalls, getActiveCalls, searchCalls) were not joining with unit_tags tables

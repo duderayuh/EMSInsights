@@ -60,6 +60,16 @@ export class RdioScannerManager extends EventEmitter {
         throw new Error(`Rdio Scanner binary not found at ${rdioScannerBinary}`);
       }
 
+      // Check if we're in a deployment environment (like Replit)
+      const isDeployment = process.env.REPLIT_DEPLOYMENT || process.env.NODE_ENV === 'production';
+      
+      if (isDeployment) {
+        console.log('Deployment environment detected - Rdio Scanner may not be available');
+        console.log('This is normal for deployment environments where external binaries may not run');
+        // Don't throw error, just return false to indicate unavailability
+        return false;
+      }
+
       // Start the server process with proper binding for external access
       this.process = spawn(rdioScannerBinary, ['-listen', `0.0.0.0:${this.port}`], {
         cwd: this.serverDir,

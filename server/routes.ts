@@ -171,7 +171,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     proxyReq.on('error', (err: any) => {
       console.error('Rdio Scanner proxy request error:', err);
       if (!res.headersSent) {
-        res.status(502).json({ error: 'Rdio Scanner service unavailable', details: err.message });
+        // Check if we're in a deployment environment and return a helpful HTML page
+        const isDeployment = process.env.REPLIT_DEPLOYMENT || process.env.NODE_ENV === 'production';
+        
+        if (isDeployment && req.url === '/rdio-scanner') {
+          // Return a helpful HTML page for deployment environments
+          const unavailableHtml = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Rdio Scanner Unavailable</title>
+              <style>
+                body { font-family: Arial, sans-serif; margin: 40px; text-align: center; }
+                .container { max-width: 600px; margin: 0 auto; }
+                .error { color: #e74c3c; }
+                .info { color: #3498db; margin-top: 20px; }
+                .button { 
+                  display: inline-block; 
+                  padding: 10px 20px; 
+                  background-color: #3498db; 
+                  color: white; 
+                  text-decoration: none; 
+                  border-radius: 5px; 
+                  margin-top: 20px;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h1 class="error">Rdio Scanner Unavailable</h1>
+                <p>The Rdio Scanner server is not available in this deployment environment.</p>
+                <p class="info">This is normal for cloud deployment environments where external binaries may not run.</p>
+                <p>The main EMS-Insight application continues to function normally.</p>
+                <a href="/" class="button">Return to EMS-Insight Dashboard</a>
+              </div>
+            </body>
+            </html>
+          `;
+          
+          res.setHeader('Content-Type', 'text/html');
+          res.status(503).send(unavailableHtml);
+        } else {
+          res.status(502).json({ error: 'Rdio Scanner service unavailable', details: err.message });
+        }
       }
     });
 

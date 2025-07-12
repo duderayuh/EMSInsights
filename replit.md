@@ -123,6 +123,11 @@ Changelog:
   - Main EMS-Insight application continues to function normally even when Rdio Scanner is unavailable
   - Improved user experience with clear messaging about deployment environment limitations
   - System now handles both development (with Rdio Scanner) and deployment (without) environments seamlessly
+  - **EXTERNAL RDIO SCANNER SUPPORT**: Added support for external Rdio Scanner instance in deployment
+  - Proxy routes now detect RDIO_SCANNER_URL environment variable (http://hoosierems.replit.app:3001)
+  - In deployment environments, proxy forwards requests to external Rdio Scanner instead of localhost
+  - Both /rdio-scanner and /rdio-scanner/admin routes work in deployed environments
+  - System automatically switches between local (development) and external (deployment) Rdio Scanner instances
 
 - July 12, 2025: CRITICAL FIX - Unit Display Database Query Resolution
   - **UNIT EXTRACTION FULLY OPERATIONAL WITH UI DISPLAY**: Fixed critical database query issue preventing units from appearing in UI

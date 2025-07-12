@@ -4,6 +4,9 @@ Abdominal/Back Pain
 Abdominal/Back Pain B
 Allergic Reaction
 Allergic Reaction B
+Assault/Trauma
+Assault/Trauma B
+Assault/Trauma C
 Assist Person
 Assist Person B
 Assist Person C
@@ -45,3 +48,9 @@ Vehicle Accident
 Vehicle Accident B
 Vehicle Accident C
 Mass Casualty
+Medical Alarm
+Building Alarm
+Resident Fire
+Residence Fire
+Trash Fire
+Investigation

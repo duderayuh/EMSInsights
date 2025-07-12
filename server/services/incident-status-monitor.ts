@@ -35,7 +35,7 @@ export class IncidentStatusMonitor {
       const enRouteIncidents = await db.select().from(incidents)
         .where(and(
           eq(incidents.status, 'en_route'),
-          isNotNull(incidents.estimatedETA)
+          sql`${incidents.estimatedETA} IS NOT NULL`
         ));
 
       for (const incident of enRouteIncidents) {
@@ -57,7 +57,7 @@ export class IncidentStatusMonitor {
       const arrivingIncidents = await db.select().from(incidents)
         .where(and(
           eq(incidents.status, 'arriving_shortly'),
-          isNotNull(incidents.estimatedETA)
+          sql`${incidents.estimatedETA} IS NOT NULL`
         ));
 
       for (const incident of arrivingIncidents) {

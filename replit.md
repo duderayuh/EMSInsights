@@ -124,6 +124,13 @@ Changelog:
   - Call 14574 successfully tagged with Medic 31 unit, confirming end-to-end unit extraction pipeline functionality
   - System now provides complete unit tracking: Audio → Transcription → Unit Extraction → Database Tagging → Dashboard Display
 
+- July 12, 2025: Dispatch Page Visibility Enhancement
+  - **NO TRANSCRIPTION FILTERING**: Implemented filtering to hide calls with "[No transcription available]" from dispatch page
+  - Updated both /api/calls and /api/calls/active endpoints to always filter out non-transcribed calls
+  - Filtering applies to all users regardless of role (admin and regular users)
+  - Ensures dispatch page only shows calls with actual emergency content
+  - Improved user experience by removing placeholder entries from operational view
+
 - July 12, 2025: EMS-Hospital Communications Call Type Standardization
   - Updated hospital-call-detector.ts to use "EMS-Hospital Communications" instead of "Hospital Communication"
   - Modified rdio-database-monitor.ts to automatically assign "EMS-Hospital Communications" call type for hospital talkgroups

@@ -454,6 +454,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let filteredCount = 0;
       
+      // Always filter out calls with no transcription available, regardless of user role
+      calls = calls.filter(call => {
+        // Filter out calls with no transcription or unable to transcribe messages
+        if (call.transcript === "[No transcription available]" || 
+            call.transcript === "[Unable to transcribe audio]") {
+          filteredCount++;
+          return false;
+        }
+        return true;
+      });
+      
       if (shouldFilter) {
         calls = calls.filter(call => {
           // Skip filtering if transcription is still pending
@@ -481,13 +492,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             call.transcript.toLowerCase().includes('test') ||
             call.transcript.length < 10
           )) {
-            filteredCount++;
-            return false;
-          }
-          
-          // Filter out calls with no transcription or unable to transcribe messages
-          if (call.transcript === "[No transcription available]" || 
-              call.transcript === "[Unable to transcribe audio]") {
             filteredCount++;
             return false;
           }
@@ -553,6 +557,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isAdmin = (req as any).user?.role === 'admin';
       const shouldFilter = !isAdmin;
       
+      // Always filter out calls with no transcription available, regardless of user role
+      activeCalls = activeCalls.filter(call => {
+        // Filter out calls with no transcription or unable to transcribe messages
+        if (call.transcript === "[No transcription available]" || 
+            call.transcript === "[Unable to transcribe audio]") {
+          return false;
+        }
+        return true;
+      });
+      
       if (shouldFilter) {
         activeCalls = activeCalls.filter(call => {
           // Skip filtering if transcription is still pending
@@ -578,12 +592,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             call.transcript.toLowerCase().includes('test') ||
             call.transcript.length < 10
           )) {
-            return false;
-          }
-          
-          // Filter out calls with no transcription or unable to transcribe messages
-          if (call.transcript === "[No transcription available]" || 
-              call.transcript === "[Unable to transcribe audio]") {
             return false;
           }
           

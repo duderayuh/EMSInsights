@@ -333,18 +333,12 @@ export function CallDetailModal({ call, onClose }: CallDetailModalProps) {
       
       // Remove units
       if (unitsToRemove.length > 0) {
-        await apiRequest(`/api/calls/${call.id}/units`, {
-          method: 'DELETE',
-          body: { unitIds: unitsToRemove }
-        });
+        await apiRequest('DELETE', `/api/calls/${call.id}/units`, { unitIds: unitsToRemove });
       }
       
       // Add units
       if (unitsToAdd.length > 0) {
-        await apiRequest(`/api/calls/${call.id}/units`, {
-          method: 'POST',
-          body: { unitIds: unitsToAdd }
-        });
+        await apiRequest('POST', `/api/calls/${call.id}/units`, { unitIds: unitsToAdd });
       }
 
       // Trigger address fix for location fields if they were changed

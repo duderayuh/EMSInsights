@@ -114,7 +114,7 @@ EMS-Insight is a real-time emergency dispatch monitoring system designed to proc
 
 ```
 Changelog:
-- July 12, 2025: CRITICAL FIX - Unit Extraction Case Sensitivity Issue Resolution
+- July 12, 2025: CRITICAL FIX - Unit Extraction Case Sensitivity Issue Resolution & Real-Time Pipeline Fix
   - **UNIT EXTRACTION SYSTEM FULLY OPERATIONAL**: Successfully resolved critical case sensitivity bug preventing unit matching
   - Fixed matchUnitsToTags function to use case-insensitive comparison (tag.unitType.toLowerCase() === extracted.unitType.toLowerCase())
   - Unit extraction now works for all emergency vehicle types: Medic, Engine, Ambulance, EMS, Squad, Ladder, Rescue, Truck, Battalion, Chief
@@ -123,6 +123,10 @@ Changelog:
   - All 990+ unit tags in database now properly matchable with extracted units from transcripts
   - Call 14574 successfully tagged with Medic 31 unit, confirming end-to-end unit extraction pipeline functionality
   - System now provides complete unit tracking: Audio → Transcription → Unit Extraction → Database Tagging → Dashboard Display
+  - **REAL-TIME UNIT EXTRACTION FIX**: Identified and fixed missing unit extraction in `/api/calls/create` endpoint
+  - Added unit extraction logic to manual call creation endpoint for dispatch talkgroups (10202, 10244)
+  - Successfully retroactively tagged 8 recent calls with units: Call 14578 (Engine 2, Medic 2, Ambulance 44) and others
+  - Unit extraction now operational in all call creation paths: rdio database monitor, manual API, and retranscription
 
 - July 12, 2025: Dispatch Page Visibility Enhancement
   - **NO TRANSCRIPTION FILTERING**: Implemented filtering to hide calls with "[No transcription available]" from dispatch page

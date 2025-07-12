@@ -878,6 +878,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const callData = insertCallSchema.parse(req.body);
       const call = await storage.createCall(callData);
       
+      // Extract and tag units for dispatch calls if transcript is available
+      if (call.transcript && (call.talkgroup === '10202' || call.talkgroup === '10244')) {
+        try {
+          await unitExtractor.tagCallWithUnits(call.id, call.transcript);
+          console.log(`Unit extraction completed for manually created call ${call.id}`);
+        } catch (error) {
+          console.error(`Error extracting units for call ${call.id}:`, error);
+        }
+      }
+      
       // Geocode the call location if available
       if (call.location) {
         try {
@@ -5153,9 +5163,12 @@ async function initializeAudioPipeline() {
           console.log(`Updated call record: ${existingCall.id} - ${classification.callType}`);
           
           // Extract and tag units for dispatch calls
+          console.log(`Checking unit extraction for call ${existingCall.id} with talkgroup ${existingCall.talkgroup}`);
           if (existingCall.talkgroup === '10202' || existingCall.talkgroup === '10244') {
+            console.log(`Extracting units for dispatch call ${existingCall.id}: "${transcriptionResult.utterance.substring(0, 100)}..."`);
             try {
               await unitExtractor.tagCallWithUnits(existingCall.id, transcriptionResult.utterance);
+              console.log(`Unit extraction completed for call ${existingCall.id}`);
             } catch (error) {
               console.error(`Error extracting units for call ${existingCall.id}:`, error);
             }

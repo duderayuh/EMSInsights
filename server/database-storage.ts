@@ -100,11 +100,25 @@ export class DatabaseStorage implements IStorage {
 
   async getCall(id: number): Promise<Call | undefined> {
     const result = await db.select().from(calls).where(eq(calls.id, id)).limit(1);
-    return result[0];
+    if (!result[0]) return undefined;
+    
+    // Fetch units for the call
+    const units = await this.getCallUnits(id);
+    return { ...result[0], units };
   }
 
   async getRecentCalls(limit: number): Promise<Call[]> {
-    return await db.select().from(calls).orderBy(desc(calls.timestamp)).limit(limit);
+    const result = await db.select().from(calls).orderBy(desc(calls.timestamp)).limit(limit);
+    
+    // Fetch units for all calls in batch
+    const callIds = result.map(call => call.id);
+    const unitsMap = await this.getBatchCallUnits(callIds);
+    
+    // Add units to each call
+    return result.map(call => ({
+      ...call,
+      units: unitsMap[call.id] || []
+    }));
   }
 
   async getActiveCalls(): Promise<Call[]> {
@@ -113,7 +127,17 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(calls.timestamp));
     
     // Filter out deleted calls in JavaScript to avoid SQL issues
-    return result.filter(call => call.status !== 'deleted');
+    const filteredCalls = result.filter(call => call.status !== 'deleted');
+    
+    // Fetch units for all calls in batch
+    const callIds = filteredCalls.map(call => call.id);
+    const unitsMap = await this.getBatchCallUnits(callIds);
+    
+    // Add units to each call
+    return filteredCalls.map(call => ({
+      ...call,
+      units: unitsMap[call.id] || []
+    }));
   }
 
   async updateCallStatus(id: number, status: string): Promise<Call | undefined> {
@@ -195,7 +219,15 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(calls.timestamp))
       .limit(params.limit || 50);
 
-    return result;
+    // Fetch units for all calls in batch
+    const callIds = result.map(call => call.id);
+    const unitsMap = await this.getBatchCallUnits(callIds);
+    
+    // Add units to each call
+    return result.map(call => ({
+      ...call,
+      units: unitsMap[call.id] || []
+    }));
   }
 
   // Audio Segment methods

@@ -114,6 +114,15 @@ EMS-Insight is a real-time emergency dispatch monitoring system designed to proc
 
 ```
 Changelog:
+- July 12, 2025: CRITICAL FIX - Unit Display Database Query Resolution
+  - **UNIT EXTRACTION FULLY OPERATIONAL WITH UI DISPLAY**: Fixed critical database query issue preventing units from appearing in UI
+  - Root cause: Database storage methods (getCall, getRecentCalls, getActiveCalls, searchCalls) were not joining with unit_tags tables
+  - Updated all call-fetching methods to include batch unit loading using getBatchCallUnits for optimal performance
+  - Testing confirmed: Call 14604 now displays 2 units (Medic 73, Ladder 94) in all API responses
+  - Unit extraction pipeline confirmed working: Transcription → Unit Extraction → Database Storage → API Display
+  - Performance optimized with batch loading to avoid N+1 query issues when fetching multiple calls
+  - Complete end-to-end functionality restored: emergency calls now show responding units in dashboard
+
 - July 12, 2025: CRITICAL FIX - Unit Extraction Case Sensitivity Issue Resolution & Real-Time Pipeline Fix
   - **UNIT EXTRACTION SYSTEM FULLY OPERATIONAL**: Successfully resolved critical case sensitivity bug preventing unit matching
   - Fixed matchUnitsToTags function to use case-insensitive comparison (tag.unitType.toLowerCase() === extracted.unitType.toLowerCase())

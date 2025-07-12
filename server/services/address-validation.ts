@@ -47,9 +47,12 @@ export class GoogleAddressValidationService {
   private baseUrl = 'https://addressvalidation.googleapis.com/v1:validateAddress';
 
   constructor() {
-    this.apiKey = process.env.GOOGLE_MAPS_API_KEY || '';
+    // Use either Google Maps API key or Google Address Validation API key
+    this.apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_ADDRESS_VALIDATION_API_KEY || '';
     if (!this.apiKey) {
-      console.warn('Google Maps API key not configured for address validation');
+      console.warn('Google API key not configured for address validation');
+    } else {
+      console.log('Google Address Validation API initialized successfully');
     }
   }
 

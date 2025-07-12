@@ -586,7 +586,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get Google Maps API key for frontend
   app.get("/api/config/google-maps-key", async (req, res) => {
     try {
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      // Try Google Maps API key first, then fall back to Address Validation key
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_ADDRESS_VALIDATION_API_KEY;
       if (!apiKey) {
         return res.status(500).json({ error: "Google Maps API key not configured" });
       }

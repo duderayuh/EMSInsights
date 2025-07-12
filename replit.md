@@ -114,17 +114,19 @@ EMS-Insight is a real-time emergency dispatch monitoring system designed to proc
 
 ```
 Changelog:
-- July 12, 2025: CRITICAL FIX - Local Rdio Scanner Server on All Environments
+- July 12, 2025: CRITICAL FIX - Local Rdio Scanner Server on All Environments & Fresh Database Reset
   - **UNIFIED RDIO SCANNER DEPLOYMENT**: Updated system to run Rdio Scanner locally on all servers
   - Removed deployment environment restrictions that prevented Rdio Scanner from starting
   - Updated rdio-scanner-manager.ts to allow local Rdio Scanner startup in production environments
   - Simplified proxy routes to always use localhost:3001 instead of external instances
   - Fixed all /rdio-scanner and /rdio-scanner/admin routes to proxy to local instance
   - Removed HTTPS handling and external URL configuration - everything runs locally
+  - Updated RDIO_SCANNER_URL environment variable from https://hoosierems.org:3001 to http://localhost:3001
   - System now provides consistent Rdio Scanner access across development and deployment
   - Rdio Scanner server starts automatically with the main application on port 3001
   - Improved reliability by eliminating external connection dependencies
   - Full control over Rdio Scanner instance on deployment servers
+  - **DATABASE RESET**: Cleared all call data (26 calls, 3 hospital calls, 10 incidents, 46 audio segments) for fresh deployment
 
 - July 12, 2025: CRITICAL FIX - Unit Display Database Query Resolution
   - **UNIT EXTRACTION FULLY OPERATIONAL WITH UI DISPLAY**: Fixed critical database query issue preventing units from appearing in UI

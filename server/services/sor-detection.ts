@@ -20,7 +20,15 @@ export class SORDetectionService {
     'sign off',
     'physician authorization',
     'doctor authorization',
-    'medical authorization'
+    'medical authorization',
+    'orders',
+    'any orders',
+    'orders at this time',
+    'questions or orders',
+    'need orders',
+    'physician orders',
+    'doctor orders',
+    'medical orders'
   ];
 
   private physicianTitles = [
@@ -65,8 +73,13 @@ export class SORDetectionService {
     }
 
     if (physicianName) {
-      isSOR = true; // If physician mentioned, likely SOR related
-      confidence += 0.5; // Additional confidence for physician name
+      confidence += 0.3; // Additional confidence for physician name
+    }
+    
+    // Check for EMS-to-hospital communication patterns
+    if (this.hasEMSHospitalContext(normalizedText)) {
+      isSOR = true; // Medical orders/communication in EMS context
+      confidence += 0.6;
     }
 
     // Adjust confidence based on context
@@ -192,6 +205,26 @@ export class SORDetectionService {
     ];
     
     return hospitalKeywords.some(keyword => text.includes(keyword));
+  }
+
+  private hasEMSHospitalContext(text: string): boolean {
+    const emsKeywords = [
+      'medic',
+      'ambulance',
+      'ems',
+      'patient',
+      'vitals',
+      'blood pressure',
+      'heart rate',
+      'eta',
+      'transport',
+      'arrival',
+      'questions or orders',
+      'any orders',
+      'orders at this time'
+    ];
+    
+    return emsKeywords.some(keyword => text.includes(keyword));
   }
 }
 

@@ -1958,14 +1958,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         db.close();
         
-        // Set appropriate headers for audio streaming
-        res.writeHead(200, {
+        // Enhanced headers for deployment compatibility
+        const baseHeaders = {
           'Content-Type': contentType,
           'Accept-Ranges': 'bytes',
           'Content-Disposition': `inline; filename="hospital_segment_${segmentId}.m4a"`,
-          'Content-Length': result.audio.length.toString(),
-          'Cache-Control': 'public, max-age=3600'
-        });
+          'Cache-Control': 'public, max-age=3600',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Allow-Headers': 'Range, Content-Type',
+          'X-Content-Type-Options': 'nosniff',
+          'Cross-Origin-Resource-Policy': 'cross-origin'
+        };
+        
+        // Handle range requests for better browser compatibility
+        const range = req.headers.range;
+        if (range) {
+          const parts = range.replace(/bytes=/, "").split("-");
+          const start = parseInt(parts[0], 10);
+          const end = parts[1] ? parseInt(parts[1], 10) : result.audio.length - 1;
+          const chunksize = (end - start) + 1;
+          const chunk = result.audio.slice(start, end + 1);
+          
+          res.writeHead(206, {
+            ...baseHeaders,
+            'Content-Range': `bytes ${start}-${end}/${result.audio.length}`,
+            'Content-Length': chunksize.toString()
+          });
+          
+          res.end(chunk);
+        } else {
+          // Standard response with enhanced deployment support
+          res.writeHead(200, {
+            ...baseHeaders,
+            'Content-Length': result.audio.length.toString()
+          });
+          res.end(result.audio);
+        }
         
         // Send the audio data as binary
         res.end(result.audio);
@@ -2393,6 +2422,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error processing all call linking:', error);
       res.status(500).json({ error: "Failed to process call linking" });
+    }
+  });
+
+  // Fix SOR detection for all hospital calls
+  app.post("/api/hospital-calls/fix-sor-detection", requireAuth, async (req, res) => {
+    try {
+      console.log('Starting SOR detection fix for all hospital calls...');
+      const { fixSORDetection } = await import('./scripts/fix-sor-detection');
+      
+      // Run the SOR detection fix
+      await fixSORDetection();
+      
+      res.json({
+        success: true,
+        message: "SOR detection fix completed successfully"
+      });
+      
+    } catch (error) {
+      console.error("Error running SOR detection fix:", error);
+      res.status(500).json({ error: "Failed to run SOR detection fix" });
     }
   });
 

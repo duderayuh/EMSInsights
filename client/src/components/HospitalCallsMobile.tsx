@@ -18,10 +18,12 @@ export default function HospitalCallsMobile() {
   const [searchQuery, setSearchQuery] = useState("");
 
   // Fetch hospital calls
-  const { data: hospitalCalls = [], isLoading } = useQuery({
+  const { data: hospitalData, isLoading } = useQuery({
     queryKey: ['/api/hospital-calls', { query: searchQuery }],
     refetchInterval: 30000,
   });
+  
+  const hospitalCalls = hospitalData?.calls || [];
 
   const renderSegment = (segment: HospitalCallSegment) => (
     <div key={segment.id} className="p-3 bg-muted/50 rounded-lg space-y-2">
@@ -187,7 +189,7 @@ export default function HospitalCallsMobile() {
         </div>
       ) : (
         <div className="space-y-2">
-          {(hospitalCalls as HospitalCall[]).map(renderCallCard)}
+          {hospitalCalls.map(renderCallCard)}
         </div>
       )}
     </MobileLayout>

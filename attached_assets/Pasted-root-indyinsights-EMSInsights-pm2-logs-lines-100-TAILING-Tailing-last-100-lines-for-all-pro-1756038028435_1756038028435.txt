@@ -1,0 +1,130 @@
+root@indyinsights:~/EMSInsights# pm2 logs --lines 100
+[TAILING] Tailing last 100 lines for [all] processes (change the value with --lines option)
+/root/.pm2/pm2.log last 100 lines:
+PM2        |   Database: /root/EMSInsights/rdio-scanner-server/rdio-scanner.db
+PM2        |   Processing to: /root/EMSInsights/ems_audio_processing
+PM2        |   Target talkgroups: 10202, 10244, 10255, 10256, 10258
+PM2        | [dotenv@17.0.1] injecting env (0) from .env – [tip] encrypt with dotenvx: https://dotenvx.com
+PM2        | Google Address Validation API initialized successfully
+PM2        | Geocoding service initialized with OpenStreetMap Nominatim
+PM2        | [dotenv@17.0.1] injecting env (0) from .env – [tip] encrypt with dotenvx: https://dotenvx.com
+PM2        | Transcript cleanup service initialized with OpenAI API
+PM2        | [dotenv@17.0.1] injecting env (0) from .env – [tip] encrypt with dotenvx: https://dotenvx.com
+PM2        | WebSocket service initialized successfully
+PM2        | Starting Rdio Scanner server automatically...
+PM2        | Automatic restart enabled for Rdio Scanner server
+PM2        | Starting Rdio Scanner server...
+PM2        | Deployment environment detected - attempting to start Rdio Scanner locally
+PM2        | Health monitoring started - checking every 10 seconds
+PM2        | Rdio Scanner server started with PID 116074 on port 3001
+PM2        | Rdio Scanner server started automatically with PID 116074 on port 3001
+PM2        | Connected to Rdio Scanner database
+PM2        | Starting Rdio Scanner database monitoring...
+PM2        | Starting incident status monitor...
+PM2        | Incident status monitor started
+PM2        | 12:17:15 PM [express] serving on port 5000
+PM2        | [Rdio Scanner] Rdio Scanner v6.6.3
+PM2        | [Rdio Scanner] ----------------------------------
+PM2        | [Rdio Scanner Error] 2025/08/24 12:17:15 server started
+PM2        | [Rdio Scanner Error] 2025/08/24 12:17:15 base folder is /root/EMSInsights/rdio-scanner-server
+PM2        | [Rdio Scanner Error] 2025/08/24 12:17:15 main interface at http://indyinsights:3001
+PM2        | [Rdio Scanner Error] 2025/08/24 12:17:15 admin interface at http://indyinsights:3001/admin
+PM2        | Loaded 0 transcription dictionary entries
+PM2        | Loaded 0 call types from database
+PM2        | Loaded 0 previously processed call IDs (max rdio ID: 0)
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Database monitor started successfully
+PM2        | Rdio Scanner database monitoring started successfully
+PM2        | Database monitor started for Rdio Scanner audio extraction
+PM2        | File monitor available as backup
+PM2        | WebSocket client available as backup (currently disabled in favor of database monitoring)
+PM2        | Starting SDRTrunk UDP listener on localhost:9999
+PM2        | Initializing transcription processor for new calls...
+PM2        | Transcription processor initialized and ready for new calls
+PM2        | Starting hospital call processor...
+PM2        | Starting hospital call processor...
+PM2        | SDRTrunk UDP server listening on 127.0.0.1:9999
+PM2        | Audio processor connected
+PM2        | Loaded 0 call types from database
+PM2        | Loaded 0 transcription dictionary entries
+PM2        | 2025-08-24T12:17:23: PM2 log: App [ems-insight:0] online
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+PM2        | Found 0 new calls since last processed ID 0
+PM2        | No new calls found, checking for recent hospital calls...
+PM2        | Found 0 recent hospital calls in last 2 hours
+
+/root/EMSInsights/logs/err.log last 100 lines:
+/root/EMSInsights/logs/out.log last 100 lines:
+0|ems-insi | 2025-08-24T09:38:56: 
+0|ems-insi | > rest-express@1.0.0 start
+0|ems-insi | > NODE_ENV=production node dist/index.js
+0|ems-insi | 
+0|ems-insi | 2025-08-24T09:38:57: 2025-08-24T09:39:01: 
+0|ems-insi | > rest-express@1.0.0 start
+0|ems-insi | > NODE_ENV=production node dist/index.js
+0|ems-insi | 
+0|ems-insi | 2025-08-24T09:39:03: 2025-08-24T09:39:07: 
+0|ems-insi | > rest-express@1.0.0 start
+0|ems-insi | > NODE_ENV=production node dist/index.js
+0|ems-insi | 
+0|ems-insi | 2025-08-24T09:39:09: 2025-08-24T09:39:13: 
+0|ems-insi | > rest-express@1.0.0 start
+0|ems-insi | > NODE_ENV=production node dist/index.js
+0|ems-insi | 
+0|ems-insi | 2025-08-24T09:39:14: 2025-08-24T09:39:19: 
+0|ems-insi | > rest-express@1.0.0 start
+0|ems-insi | > NODE_ENV=production node dist/index.js
+0|ems-insi | 
+0|ems-insi | 2025-08-24T09:39:20: 2025-08-24T12:17:14: 
+0|ems-insi | > rest-express@1.0.0 start
+0|ems-insi | > NODE_ENV=production node dist/index.js
+0|ems-insi |

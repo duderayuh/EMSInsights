@@ -1,17 +1,15 @@
 import { useEffect, useRef } from "react";
 import { MapPin } from "lucide-react";
 import { Call } from "@shared/schema";
-import AppleMapView from "./AppleMapView";
+import { GoogleMapView } from "./GoogleMapView";
 
 interface MainDashboardProps {
   calls: Call[];
   stats: any;
   onCallSelect: (call: Call) => void;
-  newCallIds?: Set<number>;
-  hoveredCallId?: number | null;
 }
 
-export function MainDashboard({ calls, stats, onCallSelect, newCallIds, hoveredCallId }: MainDashboardProps) {
+export function MainDashboard({ calls, stats, onCallSelect }: MainDashboardProps) {
   const chartsInitialized = useRef(false);
 
   useEffect(() => {
@@ -30,7 +28,7 @@ export function MainDashboard({ calls, stats, onCallSelect, newCallIds, hoveredC
       }
     };
     
-    // Tab visibility handlers are now handled within AppleMapView component
+    // Tab visibility handlers are now handled within GoogleMapView component
     
     // Cleanup function
     return () => {
@@ -47,8 +45,8 @@ export function MainDashboard({ calls, stats, onCallSelect, newCallIds, hoveredC
     <main className="flex-1 flex flex-col">
       {/* Map View */}
       <div className="flex-1 relative">
-        {/* Apple Maps Container */}
-        <AppleMapView calls={calls} onCallSelect={onCallSelect} newCallIds={newCallIds} hoveredCallId={hoveredCallId} />
+        {/* Google Maps Container */}
+        <GoogleMapView calls={calls} onCallSelect={onCallSelect} />
         
         {/* Fallback for when map is loading */}
         {calls.length === 0 && (

@@ -1,31 +1,25 @@
 import { AppHeader } from "@/components/AppHeader";
 import { CallFeedSidebar } from "@/components/CallFeedSidebar";
 import { MainDashboard } from "@/components/MainDashboard";
-import { CompactCallDetailModal } from "@/components/CompactCallDetailModal";
 import { CallDetailModal } from "@/components/CallDetailModal";
 import { HospitalCallsTab } from "@/components/HospitalCallsTab";
 import { HospitalAnalyticsDashboard } from "@/components/HospitalAnalyticsDashboard";
 import PublicHealthAnalytics from "@/pages/PublicHealthAnalytics";
 import IncidentsPage from "@/pages/incidents";
+import { MobileNavigation } from "@/components/MobileNavigation";
 import { MobileDashboard } from "@/components/MobileDashboard";
-import MobileBottomNav from "@/components/MobileBottomNav";
-import MobileHeader from "@/components/MobileHeader";
-import { AudioPlaybar } from "@/components/AudioPlaybar";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Call } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Radio, Stethoscope, Users, BarChart3, Heart } from "lucide-react";
 
 export default function Dashboard() {
   const [selectedCall, setSelectedCall] = useState<Call | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("10202");
   const [isMobile, setIsMobile] = useState(false);
-  const [newCallIds, setNewCallIds] = useState<Set<number>>(new Set());
-  const [hoveredCallId, setHoveredCallId] = useState<number | null>(null);
   
   const { user, hasAdminAccess } = useAuth();
   const isAdmin = hasAdminAccess; // Use hasAdminAccess for admin features
@@ -92,28 +86,6 @@ export default function Dashboard() {
     avgResponse: 0
   };
 
-  // Track new calls for highlighting
-  useEffect(() => {
-    if (sidebarCalls.length > 0) {
-      const latestCall = sidebarCalls[0];
-      const callAge = Date.now() - new Date(latestCall.timestamp).getTime();
-      
-      // If call is less than 30 seconds old, mark as new
-      if (callAge < 30000 && !newCallIds.has(latestCall.id)) {
-        setNewCallIds(prev => new Set([...Array.from(prev), latestCall.id]));
-        
-        // Remove new status after 10 seconds
-        setTimeout(() => {
-          setNewCallIds(prev => {
-            const updated = new Set(prev);
-            updated.delete(latestCall.id);
-            return updated;
-          });
-        }, 10000);
-      }
-    }
-  }, [sidebarCalls, newCallIds]);
-
   const handleCallSelect = (call: Call) => {
     setSelectedCall(call);
   };
@@ -144,46 +116,70 @@ export default function Dashboard() {
   // Mobile Layout
   if (isMobile) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-foreground">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-foreground">
         {/* Mobile Header */}
-        <MobileHeader />
-        
-        {/* Content Area with padding for fixed header, bottom nav, and AudioPlaybar */}
-        <div className="pt-14 pb-32 h-screen overflow-hidden"> {/* Increased bottom padding for AudioPlaybar + bottom nav */}
-          <div className="h-full overflow-y-auto">
-            {/* Stats Overview */}
-            <div className="bg-white dark:bg-gray-800 border-b px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">
-                    {displayStats.activeCalls} Active Calls
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {displayStats.todayTotal} calls today
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full animate-pulse ${connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
-                  <span className="text-xs font-medium">
-                    {connectionStatus === 'connected' ? 'Live' : 'Offline'}
-                  </span>
-                </div>
-              </div>
+        <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b">
+          <div className="flex items-center gap-3">
+            <MobileNavigation user={user} unreadAlertsCount={unreadAlertsCount} />
+            <div>
+              <h1 className="text-lg font-semibold">EMS Insight</h1>
+              <p className="text-xs text-muted-foreground">
+                {displayStats.activeCalls} active • {displayStats.todayTotal} today
+              </p>
             </div>
-
-            {/* Main Content */}
-            <div className="p-4">
-              <MobileDashboard />
-            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className="text-xs text-muted-foreground">
+              {connectionStatus === 'connected' ? 'Live' : 'Offline'}
+            </span>
           </div>
         </div>
 
-        {/* Bottom Navigation */}
-        <MobileBottomNav />
+        {/* Mobile Dashboard Content */}
+        <Tabs defaultValue="dashboard" className="flex-1">
+          <div className="px-4 pt-2 pb-0">
+            <TabsList className="grid w-full grid-cols-2 gap-1">
+              <TabsTrigger value="dashboard" className="text-xs px-2">Dispatch</TabsTrigger>
+              <TabsTrigger value="incidents" className="text-xs px-2">Unit Tracking</TabsTrigger>
+            </TabsList>
+            {hasAdminAccess && (
+              <TabsList className="grid w-full grid-cols-3 gap-1 mt-1">
+                <TabsTrigger value="hospital" className="text-xs px-1">Hospital</TabsTrigger>
+                <TabsTrigger value="analytics" className="text-xs px-1">Analytics</TabsTrigger>
+                <TabsTrigger value="public-health" className="text-xs px-1">Public Health</TabsTrigger>
+              </TabsList>
+            )}
+          </div>
+          
+          <TabsContent value="dashboard" className="m-0 px-4 pb-4">
+            <MobileDashboard />
+          </TabsContent>
+          
+          <TabsContent value="incidents" className="m-0 h-[calc(100vh-180px)] overflow-y-auto">
+            <IncidentsPage />
+          </TabsContent>
+          
+          {hasAdminAccess && (
+            <>
+              <TabsContent value="hospital" className="m-0 h-[calc(100vh-180px)] overflow-y-auto">
+                <HospitalCallsTab />
+              </TabsContent>
+              
+              <TabsContent value="analytics" className="m-0 h-[calc(100vh-180px)] overflow-y-auto">
+                <HospitalAnalyticsDashboard />
+              </TabsContent>
+              
+              <TabsContent value="public-health" className="m-0 h-[calc(100vh-180px)] overflow-y-auto">
+                <PublicHealthAnalytics />
+              </TabsContent>
+            </>
+          )}
+        </Tabs>
 
-        {/* Modals */}
         {selectedCall && (
-          <CompactCallDetailModal
+          <CallDetailModal
             call={selectedCall}
             onClose={handleCloseModal}
           />
@@ -215,84 +211,47 @@ export default function Dashboard() {
           }, 300);
         }
       }}>
-        <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border-b border-gray-700 shadow-lg">
-          <div className="px-6 py-3">
-            <TabsList className="bg-transparent flex gap-2 w-full justify-center p-1">
-              <TabsTrigger 
-                value="dashboard" 
-                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=inactive]:bg-gray-800/50 data-[state=inactive]:text-gray-300 data-[state=inactive]:hover:bg-gray-700/50 data-[state=inactive]:hover:text-white transition-all duration-200 px-6 py-3 rounded-lg flex items-center gap-2 font-medium"
-              >
-                <Radio className="h-4 w-4" />
-                <span>Dispatch</span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="hospital" 
-                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=inactive]:bg-gray-800/50 data-[state=inactive]:text-gray-300 data-[state=inactive]:hover:bg-gray-700/50 data-[state=inactive]:hover:text-white transition-all duration-200 px-6 py-3 rounded-lg flex items-center gap-2 font-medium"
-              >
-                <Stethoscope className="h-4 w-4" />
-                <span>EMS-Hospital</span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="incidents" 
-                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=inactive]:bg-gray-800/50 data-[state=inactive]:text-gray-300 data-[state=inactive]:hover:bg-gray-700/50 data-[state=inactive]:hover:text-white transition-all duration-200 px-6 py-3 rounded-lg flex items-center gap-2 font-medium"
-              >
-                <Users className="h-4 w-4" />
-                <span>Unit Tracking</span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="analytics" 
-                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=inactive]:bg-gray-800/50 data-[state=inactive]:text-gray-300 data-[state=inactive]:hover:bg-gray-700/50 data-[state=inactive]:hover:text-white transition-all duration-200 px-6 py-3 rounded-lg flex items-center gap-2 font-medium"
-              >
-                <BarChart3 className="h-4 w-4" />
-                <span>Analytics</span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="public-health" 
-                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=inactive]:bg-gray-800/50 data-[state=inactive]:text-gray-300 data-[state=inactive]:hover:bg-gray-700/50 data-[state=inactive]:hover:text-white transition-all duration-200 px-6 py-3 rounded-lg flex items-center gap-2 font-medium"
-              >
-                <Heart className="h-4 w-4" />
-                <span>Public Health</span>
-              </TabsTrigger>
-            </TabsList>
-          </div>
+        <div className="border-b border-border bg-gray-50 dark:bg-gray-800 px-6">
+          <TabsList className="grid w-[900px] grid-cols-5">
+            <TabsTrigger value="dashboard">Dispatch</TabsTrigger>
+            <TabsTrigger value="hospital">EMS-Hospital Calls</TabsTrigger>
+            <TabsTrigger value="incidents">Unit Tracking</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="public-health">Public Health</TabsTrigger>
+          </TabsList>
         </div>
         
         <TabsContent value="dashboard" className="m-0 h-[calc(100vh-120px)]">
-          <div className="flex h-[calc(100%-80px)] overflow-hidden"> {/* Reduced height for AudioPlaybar */}
+          <div className="flex h-full overflow-hidden">
             <CallFeedSidebar
               calls={filteredCalls}
               onCallSelect={handleCallSelect}
               onSearch={handleSearch}
               onPriorityFilter={handlePriorityFilter}
               isLoading={searchQuery ? isSearching : isLoading}
-              newCallIds={newCallIds}
-              onCallHover={setHoveredCallId}
             />
             
             <MainDashboard
               calls={allCalls}
               stats={displayStats}
               onCallSelect={handleCallSelect}
-              newCallIds={newCallIds}
-              hoveredCallId={hoveredCallId}
             />
           </div>
-          <AudioPlaybar />
         </TabsContent>
         
-        <TabsContent value="hospital" className="m-0 h-[calc(100vh-200px)]"> {/* Added padding for AudioPlaybar */}
+        <TabsContent value="hospital" className="m-0 h-[calc(100vh-120px)]">
           <HospitalCallsTab />
         </TabsContent>
         
-        <TabsContent value="analytics" className="m-0 h-[calc(100vh-200px)] overflow-y-auto"> {/* Added padding for AudioPlaybar */}
+        <TabsContent value="analytics" className="m-0 h-[calc(100vh-120px)] overflow-y-auto">
           <HospitalAnalyticsDashboard />
         </TabsContent>
         
-        <TabsContent value="public-health" className="m-0 h-[calc(100vh-200px)] overflow-y-auto"> {/* Added padding for AudioPlaybar */}
+        <TabsContent value="public-health" className="m-0 h-[calc(100vh-120px)] overflow-y-auto">
           <PublicHealthAnalytics />
         </TabsContent>
         
-        <TabsContent value="incidents" className="m-0 h-[calc(100vh-200px)] overflow-y-auto"> {/* Added padding for AudioPlaybar */}
+        <TabsContent value="incidents" className="m-0 h-[calc(100vh-120px)] overflow-y-auto">
           <IncidentsPage />
         </TabsContent>
       </Tabs>

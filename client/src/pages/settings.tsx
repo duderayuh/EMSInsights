@@ -12,7 +12,6 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import type { SystemSetting, CustomHospital, CustomTalkgroup, TranscriptionDictionary, UnitTag, CallType } from '@shared/schema';
 import { Link } from 'wouter';
-import MobileLayout from '@/components/MobileLayout';
 
 interface EditFormData {
   id?: number;
@@ -37,16 +36,6 @@ const categoryColors = {
 export default function SettingsPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('general');
-  const [isMobile, setIsMobile] = useState(false);
-  
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
   const [editingItem, setEditingItem] = useState<EditFormData | null>(null);
   const [formData, setFormData] = useState<EditFormData>({});
   const [passwordData, setPasswordData] = useState({
@@ -1290,8 +1279,8 @@ export default function SettingsPage() {
     );
   };
 
-  const content = (
-    <div className={isMobile ? "p-4" : "container mx-auto p-4 sm:p-6 max-w-6xl"}>
+  return (
+    <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
       <div className="mb-4 sm:mb-6">
         <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
           <div>
@@ -1492,14 +1481,4 @@ export default function SettingsPage() {
       {renderEditModal()}
     </div>
   );
-  
-  if (isMobile) {
-    return (
-      <MobileLayout title="Settings">
-        {content}
-      </MobileLayout>
-    );
-  }
-  
-  return content;
 }

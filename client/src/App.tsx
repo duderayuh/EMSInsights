@@ -12,13 +12,10 @@ import LoginPage from "@/pages/login";
 import HospitalCallDetail from "@/pages/hospital-call-detail";
 import AnalyticsPage from "@/pages/analytics";
 import HospitalPage from "@/pages/hospital";
-import HospitalCallsMobile from "@/components/HospitalCallsMobile";
 import SettingsPage from "@/pages/settings";
 import AlertManagementPage from "@/pages/alert-management";
 import PublicHealthAnalytics from "@/pages/PublicHealthAnalytics";
 import IncidentsPage from "@/pages/incidents";
-import IncidentsMobilePage from "@/pages/incidents-mobile";
-import MobileMapPage from "@/pages/mobile-map";
 import { useAuth } from "@/hooks/useAuth";
 
 // Protected route wrapper component
@@ -97,10 +94,7 @@ function Router() {
         {() => <ProtectedRoute component={AdminPage} superAdminOnly={true} />}
       </Route>
       <Route path="/hospital-calls/:id">
-        {() => {
-          const isMobile = window.innerWidth < 768;
-          return <ProtectedRoute component={isMobile ? HospitalCallsMobile : HospitalCallDetail} />;
-        }}
+        {() => <ProtectedRoute component={HospitalCallDetail} />}
       </Route>
       <Route path="/analytics">
         {() => <ProtectedRoute component={AnalyticsPage} adminOnly={true} />}
@@ -109,10 +103,7 @@ function Router() {
         {() => <ProtectedRoute component={PublicHealthAnalytics} adminOnly={true} />}
       </Route>
       <Route path="/hospital">
-        {() => {
-          const isMobile = window.innerWidth < 768;
-          return <ProtectedRoute component={isMobile ? HospitalCallsMobile : HospitalPage} adminOnly={true} />;
-        }}
+        {() => <ProtectedRoute component={HospitalPage} adminOnly={true} />}
       </Route>
       <Route path="/settings">
         {() => <ProtectedRoute component={SettingsPage} adminOnly={true} />}
@@ -121,13 +112,7 @@ function Router() {
         {() => <ProtectedRoute component={AlertManagementPage} adminOnly={true} />}
       </Route>
       <Route path="/incidents">
-        {() => {
-          const isMobile = window.innerWidth < 768;
-          return <ProtectedRoute component={isMobile ? IncidentsMobilePage : IncidentsPage} />;
-        }}
-      </Route>
-      <Route path="/mobile-map">
-        {() => <ProtectedRoute component={MobileMapPage} />}
+        {() => <ProtectedRoute component={IncidentsPage} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,9 +11,8 @@ import { Button } from '@/components/ui/button';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import AppleMapView from '@/components/AppleMapView';
+import { GoogleMapView } from '@/components/GoogleMapView';
 import { format } from 'date-fns';
-import MobileLayout from '@/components/MobileLayout';
 
 interface PublicHealthSummary {
   totalCalls: number;
@@ -108,16 +107,6 @@ function GenerateInsightsButton() {
 export default function PublicHealthAnalytics() {
   const [dateRange, setDateRange] = useState('7');
   const [selectedComplaint, setSelectedComplaint] = useState('all');
-  const [isMobile, setIsMobile] = useState(false);
-  
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   // Fetch summary data
   const { data: summary, isLoading: summaryLoading } = useQuery<PublicHealthSummary>({
@@ -182,36 +171,16 @@ export default function PublicHealthAnalytics() {
     return chartData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [trends, selectedComplaint]);
 
-  // Create map markers from clusters - convert to Call format for AppleMapView
+  // Create map markers from clusters
   const mapMarkers = React.useMemo(() => {
     if (!summary?.recentClusters) return [];
     
     return summary.recentClusters.map((cluster, idx) => ({
-      id: idx + 1000, // Unique numeric ID for map markers
-      timestamp: new Date(),
-      audioSegmentId: `cluster-${idx}`,
-      transcript: null,
-      confidence: null,
-      startMs: null,
-      endMs: null,
-      metadata: null,
-      duration: null,
-      callType: cluster.chiefComplaint,
-      priority: 'medium' as const,
-      location: `${cluster.chiefComplaint} cluster area`,
-      latitude: cluster.latitude,
-      longitude: cluster.longitude,
-      incidentNumber: null,
-      source: 'analytics' as const,
-      status: 'active' as const,
-      confidence_score: null,
-      units: null,
-      notes: `${cluster.count} calls in this area`,
-      isTest: false,
-      rdioCallId: null,
-      incidentId: null,
-      createdAt: new Date(),
-      updatedAt: null
+      id: `cluster-${idx}`,
+      position: { lat: cluster.latitude, lng: cluster.longitude },
+      title: `${cluster.chiefComplaint} (${cluster.count} calls)`,
+      type: cluster.chiefComplaint.toLowerCase(),
+      color: getComplaintColor(cluster.chiefComplaint)
     }));
   }, [summary]);
 
@@ -226,7 +195,7 @@ export default function PublicHealthAnalytics() {
     );
   }
 
-  const content = (
+  return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
@@ -405,8 +374,10 @@ export default function PublicHealthAnalytics() {
             </CardHeader>
             <CardContent>
               <div className="h-[600px]">
-                <AppleMapView
+                <GoogleMapView
                   calls={mapMarkers}
+                  showOverlays={false}
+                  showDispatchOverlay={false}
                 />
               </div>
               
@@ -489,14 +460,4 @@ export default function PublicHealthAnalytics() {
       </Tabs>
     </div>
   );
-  
-  if (isMobile) {
-    return (
-      <MobileLayout title="Public Health">
-        {content}
-      </MobileLayout>
-    );
-  }
-  
-  return content;
 }

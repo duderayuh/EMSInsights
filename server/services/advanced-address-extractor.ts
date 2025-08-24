@@ -281,41 +281,18 @@ export class AdvancedAddressExtractor {
   }
 
   private extractByNumericalPattern(transcript: string): AddressExtractionResult {
-    // Handle broken numbers in addresses with various patterns
-    const patterns = [
-      // Pattern 1: Numbers with dashes before street (e.g., "38-66 arquette" -> "3866 arquette")
-      {
-        pattern: /\b(\d{1,2})[\s\-]+(\d{2})[\s,]+([a-zA-Z][a-zA-Z0-9\s]{1,25}?)\s+(street|st|avenue|ave|road|rd|drive|dr|lane|ln|place|pl|court|ct|circle|cir|boulevard|blvd|parkway|pkwy|way|trail|terrace|ter)\b/gi,
-        reconstruct: (m: RegExpMatchArray) => `${m[1]}${m[2]} ${m[3]} ${m[4]}`
-      },
-      // Pattern 2: Three number segments with dashes (e.g., "42-38-66 arquette" -> "3866 arquette", skipping first segment as unit)
-      {
-        pattern: /\b\d{1,2}[\s\-]+(\d{2})[\s\-]+(\d{2})[\s,]+([a-zA-Z][a-zA-Z0-9\s]{1,25}?)\s+(street|st|avenue|ave|road|rd|drive|dr|lane|ln|place|pl|court|ct|circle|cir|boulevard|blvd|parkway|pkwy|way|trail|terrace|ter)\b/gi,
-        reconstruct: (m: RegExpMatchArray) => `${m[1]}${m[2]} ${m[3]} ${m[4]}`
-      },
-      // Pattern 3: Numbers with spaces (e.g., "78 47 Roy Road" -> "7847 Roy Road")
-      {
-        pattern: /\b(\d{1,2})\s+(\d{1,2})\s+([a-zA-Z][a-zA-Z0-9\s]{1,25}?)\s+(street|st|avenue|ave|road|rd|drive|dr|lane|ln|place|pl|court|ct|circle|cir|boulevard|blvd|parkway|pkwy|way|trail|terrace|ter)\b/gi,
-        reconstruct: (m: RegExpMatchArray) => `${m[1]}${m[2]} ${m[3]} ${m[4]}`
-      },
-      // Pattern 4: Single digit followed by three digits (e.g., "3 866 arquette" -> "3866 arquette")
-      {
-        pattern: /\b(\d)[\s\-]+(\d{3})[\s,]+([a-zA-Z][a-zA-Z0-9\s]{1,25}?)\s+(street|st|avenue|ave|road|rd|drive|dr|lane|ln|place|pl|court|ct|circle|cir|boulevard|blvd|parkway|pkwy|way|trail|terrace|ter)\b/gi,
-        reconstruct: (m: RegExpMatchArray) => `${m[1]}${m[2]} ${m[3]} ${m[4]}`
-      }
-    ];
+    // Handle broken numbers in addresses (e.g., "78 47 Roy Road" -> "7847 Roy Road")
+    const brokenNumberPattern = /\b(\d{1,2})\s+(\d{1,2})\s+([a-zA-Z][a-zA-Z0-9\s]{1,25}?)\s+(street|st|avenue|ave|road|rd|drive|dr|lane|ln|place|pl|court|ct|circle|cir|boulevard|blvd|parkway|pkwy|way|trail|terrace|ter)\b/gi;
     
-    for (const { pattern, reconstruct } of patterns) {
-      const matches = Array.from(transcript.matchAll(pattern));
-      for (const match of matches) {
-        const reconstructedAddress = reconstruct(match);
-        if (this.isValidAddress(reconstructedAddress)) {
-          return {
-            address: this.normalizeAddress(reconstructedAddress),
-            confidence: 0.82,
-            method: 'numerical_pattern'
-          };
-        }
+    const matches = Array.from(transcript.matchAll(brokenNumberPattern));
+    for (const match of matches) {
+      const reconstructedAddress = `${match[1]}${match[2]} ${match[3]} ${match[4]}`;
+      if (this.isValidAddress(reconstructedAddress)) {
+        return {
+          address: this.normalizeAddress(reconstructedAddress),
+          confidence: 0.82,
+          method: 'numerical_pattern'
+        };
       }
     }
 

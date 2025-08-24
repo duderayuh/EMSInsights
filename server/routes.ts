@@ -34,7 +34,6 @@ import { VoiceTypeClassifier } from "./services/voice-type-classifier";
 import { unitExtractor } from "./services/unit-extractor";
 import { transcriptionFixer } from "./scripts/fix-transcriptions";
 import { analyticsRoutes } from "./analytics.routes";
-import { appleMapKitTokenService } from "./services/apple-mapkit-token";
 
 let wsService: WebSocketService;
 
@@ -683,39 +682,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Fetch units for calls to filter based on completeness
-      const callIds = activeCalls.map(call => call.id);
-      const unitTagsMap = await storage.getBatchCallUnits(callIds);
+      // Don't fetch unit tags for all calls - let frontend fetch them on demand
+      // This was causing extreme slowness with many calls
       
-      // Filter out incomplete calls (must have units, location, and call type)
-      const completeCalls = activeCalls.filter(call => {
-        const units = unitTagsMap[call.id] || [];
-        
-        // Must have units
-        if (units.length === 0) {
-          return false;
-        }
-        
-        // Must have a valid location/address
-        if (!call.location || call.location === 'none' || call.location === '') {
-          return false;
-        }
-        
-        // Must have a valid call type (not Unknown or empty)
-        if (!call.callType || call.callType === 'Unknown' || call.callType === '') {
-          return false;
-        }
-        
-        return true;
-      });
-      
-      // Enhance calls with talkgroup descriptions, voice type, and units
-      const enhancedCalls = completeCalls.map(call => ({
+      // Enhance calls with talkgroup descriptions and voice type
+      const enhancedCalls = activeCalls.map(call => ({
         ...call,
         talkgroupDescription: call.talkgroup ? talkgroupMapper.getDescription(call.talkgroup) : null,
         talkgroupDisplayName: call.talkgroup ? talkgroupMapper.getDisplayName(call.talkgroup) : null,
         voiceTypeDescription: call.voiceType ? VoiceTypeClassifier.getVoiceTypeDescription(call.voiceType) : null,
-        units: unitTagsMap[call.id] || []
+        units: [] // Empty for now, fetch on demand if needed
       }));
       
       res.json(enhancedCalls);
@@ -736,43 +712,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching Google Maps API key:', error);
       res.status(500).json({ error: "Failed to fetch Google Maps API key" });
-    }
-  });
-
-  // Get Apple MapKit JS token for frontend
-  app.get("/api/config/apple-mapkit-token", async (req, res) => {
-    try {
-      // Check if we have a JWT token in the environment
-      const mapkitToken = process.env.APPLE_MAPKIT_JS_TOKEN;
-      
-      if (mapkitToken) {
-        // We have the JWT token directly
-        console.log('Using Apple MapKit JWT token from APPLE_MAPKIT_JS_TOKEN environment variable');
-        res.json({ token: mapkitToken });
-      } else {
-        // Fallback to check the old variable or try to generate
-        const mapkitKey = process.env.APPLE_MAPKIT_JS_KEY;
-        
-        if (mapkitKey && mapkitKey.startsWith('ey')) {
-          // It's likely already a JWT token, use it directly
-          console.log('Using Apple MapKit JWT token from APPLE_MAPKIT_JS_KEY environment variable');
-          res.json({ token: mapkitKey });
-        } else if (appleMapKitTokenService.isConfigured()) {
-          // Try to generate one if we have the necessary components
-          try {
-            const token = appleMapKitTokenService.generateToken();
-            res.json({ token });
-          } catch (genError) {
-            console.error('Failed to generate token:', genError);
-            return res.status(500).json({ error: "Failed to generate Apple MapKit JS token" });
-          }
-        } else {
-          return res.status(500).json({ error: "Apple MapKit JS not configured. Please provide APPLE_MAPKIT_JS_TOKEN environment variable" });
-        }
-      }
-    } catch (error) {
-      console.error('Error handling Apple MapKit JS token:', error);
-      res.status(500).json({ error: "Failed to handle Apple MapKit JS token" });
     }
   });
 
@@ -1001,88 +940,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(trends);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch trends" });
-    }
-  });
-
-  // Confidence monitoring endpoints
-  app.get("/api/confidence/metrics", requireAuth, async (req, res) => {
-    try {
-      const { confidenceMonitor } = await import('./services/confidence-monitor');
-      const hours = parseInt(req.query.hours as string) || 24;
-      const metrics = await confidenceMonitor.getConfidenceMetrics(hours);
-      res.json(metrics);
-    } catch (error) {
-      console.error('Error fetching confidence metrics:', error);
-      res.status(500).json({ error: "Failed to fetch confidence metrics" });
-    }
-  });
-
-  app.get("/api/confidence/report", requireAuth, async (req, res) => {
-    try {
-      const { confidenceMonitor } = await import('./services/confidence-monitor');
-      const report = await confidenceMonitor.generateQualityReport();
-      res.json(report);
-    } catch (error) {
-      console.error('Error generating quality report:', error);
-      res.status(500).json({ error: "Failed to generate quality report" });
-    }
-  });
-
-  app.get("/api/confidence/realtime", requireAuth, async (req, res) => {
-    try {
-      const { confidenceMonitor } = await import('./services/confidence-monitor');
-      const stats = await confidenceMonitor.getRealTimeStats();
-      res.json(stats);
-    } catch (error) {
-      console.error('Error fetching real-time stats:', error);
-      res.status(500).json({ error: "Failed to fetch real-time confidence stats" });
-    }
-  });
-
-  app.get("/api/confidence/retry-candidates", requireAuth, async (req, res) => {
-    try {
-      const { confidenceMonitor } = await import('./services/confidence-monitor');
-      const threshold = parseFloat(req.query.threshold as string) || 0.7;
-      const segments = await confidenceMonitor.getSegmentsForRetry(threshold);
-      res.json({ segments, count: segments.length });
-    } catch (error) {
-      console.error('Error fetching retry candidates:', error);
-      res.status(500).json({ error: "Failed to fetch retry candidates" });
-    }
-  });
-
-  // Test endpoint for transcription quality improvements
-  app.post("/api/test/transcription-quality", requireAuth, requireAdmin, async (req, res) => {
-    try {
-      const { text } = req.body;
-      if (!text) {
-        return res.status(400).json({ error: "Test text required" });
-      }
-
-      const { emsDictionary } = await import('./services/ems-dictionary');
-      
-      // Apply EMS dictionary corrections
-      const corrected = emsDictionary.correctTranscript(text);
-      const entities = emsDictionary.extractEntities(corrected);
-      const isValid = emsDictionary.isValidEMSTranscript(corrected);
-      const confidenceBoost = emsDictionary.getConfidenceBoost(text, corrected);
-      
-      res.json({
-        original: text,
-        corrected,
-        entities,
-        isValidEMS: isValid,
-        confidenceBoost: (confidenceBoost * 100).toFixed(1) + '%',
-        improvements: {
-          hadUnitCorrections: entities.units.length > 0,
-          hadHospitalCorrections: entities.hospitals.length > 0,
-          hadAddressCorrections: entities.addresses.length > 0,
-          hadMedicalCorrections: entities.medical.length > 0
-        }
-      });
-    } catch (error) {
-      console.error('Error testing transcription quality:', error);
-      res.status(500).json({ error: "Failed to test transcription quality" });
     }
   });
 
@@ -2279,6 +2136,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           res.end(result.audio);
         }
+        
+        // Send the audio data as binary
+        res.end(result.audio);
         
       } catch (dbError) {
         if (db) db.close();
@@ -4056,108 +3916,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error deleting custom talkgroup:', error);
       res.status(500).json({ error: 'Failed to delete custom talkgroup' });
-    }
-  });
-
-  // Audio Playbar API Routes - Get live audio for specific talkgroup
-  app.get("/api/audio/live/:talkgroupId", async (req, res) => {
-    try {
-      const { talkgroupId } = req.params;
-      
-      // Get recent calls for this talkgroup (last 10)
-      const calls = await storage.getCalls();
-      const filteredCalls = calls
-        .filter(call => call.talkgroup === talkgroupId)
-        .slice(0, 10);
-      
-      // Format the audio files for playback
-      const audioFiles = filteredCalls.map(call => ({
-        id: call.id.toString(),
-        audioSegmentId: call.audioSegmentId,
-        rdioCallId: (call.metadata as any)?.rdioCallId,
-        timestamp: call.timestamp.toISOString(),
-        duration: call.duration || 0,
-        talkgroup: call.talkgroup,
-      }));
-      
-      res.json(audioFiles);
-    } catch (error) {
-      console.error('Error fetching live audio:', error);
-      res.status(500).json({ error: "Failed to fetch live audio" });
-    }
-  });
-
-  // Get audio file by rdio call ID
-  app.get("/api/audio/rdio/:rdioCallId", async (req, res) => {
-    try {
-      const rdioCallId = parseInt(req.params.rdioCallId);
-      
-      // Access the Rdio Scanner database directly to get audio
-      const Database = await import('better-sqlite3');
-      const path = await import('path');
-      const fs = await import('fs');
-      
-      const rdioDbPath = path.join(process.cwd(), 'rdio-scanner-server/rdio-scanner.db');
-      
-      if (!fs.existsSync(rdioDbPath)) {
-        return res.status(503).json({ 
-          error: "Audio database not available",
-          details: "Rdio Scanner database file not found"
-        });
-      }
-      
-      const db = new Database.default(rdioDbPath, { readonly: true });
-      
-      try {
-        const stmt = db.prepare('SELECT audio, audioType FROM rdioScannerCalls WHERE id = ?');
-        const result = stmt.get(rdioCallId) as { audio: Buffer; audioType: string } | undefined;
-        
-        if (!result || !result.audio) {
-          db.close();
-          return res.status(404).json({ 
-            error: "Audio not found in Rdio Scanner database"
-          });
-        }
-        
-        const audioBuffer = result.audio;
-        const audioType = result.audioType || 'm4a';
-        const mimeType = audioType === 'mp3' ? 'audio/mpeg' : 'audio/mp4';
-        
-        db.close();
-        
-        // Handle range requests for audio streaming
-        const range = req.headers.range;
-        if (range) {
-          const parts = range.replace(/bytes=/, "").split("-");
-          const start = parseInt(parts[0], 10);
-          const end = parts[1] ? parseInt(parts[1], 10) : audioBuffer.length - 1;
-          const chunksize = (end - start) + 1;
-          
-          const head = {
-            'Content-Range': `bytes ${start}-${end}/${audioBuffer.length}`,
-            'Accept-Ranges': 'bytes',
-            'Content-Length': chunksize,
-            'Content-Type': mimeType,
-          };
-          
-          res.writeHead(206, head);
-          res.end(audioBuffer.slice(start, end + 1));
-        } else {
-          res.writeHead(200, {
-            'Content-Length': audioBuffer.length,
-            'Content-Type': mimeType,
-            'Accept-Ranges': 'bytes',
-          });
-          res.end(audioBuffer);
-        }
-      } catch (dbError) {
-        if (db) db.close();
-        console.error('Error querying Rdio Scanner database:', dbError);
-        return res.status(500).json({ error: "Failed to query Rdio Scanner database" });
-      }
-    } catch (error) {
-      console.error('Error serving rdio audio:', error);
-      res.status(500).json({ error: "Failed to serve rdio audio" });
     }
   });
 

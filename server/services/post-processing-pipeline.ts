@@ -248,15 +248,6 @@ export class PostProcessingPipeline {
 
     // Common dispatch audio corrections
     const corrections: [RegExp, string][] = [
-      // Fix house numbers spoken as separate groups (e.g., "medic 42-38-66 arquette" -> "medic 42, 3866 arquette")
-      // Pattern 1: Unit followed by broken address number (42-38-66 -> unit 42, address 3866)
-      [/\b(ambulance|medic|engine|ladder|squad|rescue)\s*(\d{1,2})[,\s\-]+(\d{2})[,\s\-]+(\d{2})[,\s]+([a-zA-Z])/gi, '$1 $2, $3$4 $5'],
-      
-      // Pattern 2: Fix standalone broken address numbers before street names (38-66 arquette -> 3866 arquette)
-      [/\b(\d{2})[,\s\-]+(\d{2})[,\s]+([a-zA-Z][a-zA-Z]+)/g, '$1$2 $3'],
-      [/\b(\d{1})[,\s\-]+(\d{3})[,\s]+([a-zA-Z][a-zA-Z]+)/g, '$1$2 $3'],
-      [/\b(\d{2})[,\s\-]+(\d{3})[,\s]+([a-zA-Z][a-zA-Z]+)/g, '$1$2 $3'],
-      
       // Split numbers that should be together
       [/\b(\d)\s+(\d)\s+(\d)\s+(\d)\b/g, '$1$2$3$4'], // "9 0 1 5" -> "9015"
       [/\b(\d)\s+(\d)\s+(\d)\b/g, '$1$2$3'], // "7 1 2" -> "712"

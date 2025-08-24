@@ -329,133 +329,21 @@ export class NLPClassifier {
   private applyTerminologyCorrections(callType: string, transcript: string): string {
     const text = transcript.toLowerCase();
     
-    // Enhanced mapping to available call types
-    // Check for specific medical conditions
-    if (text.includes("cardiac arrest") || text.includes("heart stopped")) {
-      return "Cardiac Arrest";
-    }
-    
-    if (text.includes("chest pain") || text.includes("heart attack")) {
-      return "Chest Pain";
-    }
-    
-    if (text.includes("difficulty breathing") || text.includes("trouble breathing") || text.includes("shortness of breath") || text.includes("sob")) {
-      return "Difficulty Breathing";
-    }
-    
-    if (text.includes("seizure") || text.includes("seizing")) {
-      return "Seizure";
-    }
-    
-    if (text.includes("stroke") || text.includes("cva") || text.includes("cerebrovascular")) {
-      return "Stroke/CVA";
-    }
-    
-    if (text.includes("diabetic") || text.includes("blood sugar") || text.includes("glucose")) {
-      return "Diabetic";
-    }
-    
-    if (text.includes("overdose") || text.includes("od") || text.includes("poisoning")) {
-      return "Overdose";
-    }
-    
-    if (text.includes("unconscious") || text.includes("unresponsive") || text.includes("fainting")) {
-      return "Unconscious Person";
-    }
-    
-    if (text.includes("mental") || text.includes("emotional") || text.includes("psychiatric") || text.includes("psych")) {
-      return "Mental/Emotional";
-    }
-    
-    if (text.includes("bleeding") && !text.includes("trauma")) {
-      return "Bleeding Non-Traumatic";
-    }
-    
-    if (text.includes("abdominal pain") || text.includes("stomach pain")) {
-      return "Abdominal Pain";
-    }
-    
-    if (text.includes("back pain")) {
-      return "Abdominal/Back Pain";
-    }
-    
-    if (text.includes("headache")) {
-      return "Headache";
-    }
-    
-    if (text.includes("allergic") || text.includes("allergy")) {
-      return "Allergic Reaction";
-    }
-    
-    // Trauma-related
-    if (text.includes("mvc") || text.includes("motor vehicle") || text.includes("car accident") || text.includes("crash")) {
-      return "Vehicle Accident";
-    }
-    
-    if (text.includes("gsw") || text.includes("gunshot")) {
-      return "Gunshot Wound";
-    }
-    
-    if (text.includes("stabbing") || text.includes("stab wound") || text.includes("penetrating")) {
-      return "Stab / Gunshot / Penetrating Trauma";
-    }
-    
-    if (text.includes("assault")) {
-      return "Assault / Sexual Assault / Stun Gun";
-    }
-    
-    if (text.includes("injured") || text.includes("injury") || text.includes("trauma")) {
-      return "Injured Person";
-    }
-    
-    // OB/Childbirth
-    if (text.includes("ob") || text.includes("childbirth") || text.includes("pregnancy") || text.includes("pregnant") || text.includes("labor")) {
-      return "OB/Childbirth";
-    }
-    
-    // Fire-related
-    if (text.includes("fire") || text.includes("smoke") || text.includes("flames")) {
-      if (text.includes("residential") || text.includes("house") || text.includes("apartment")) {
-        return "Residential Fire";
-      }
-      return "Fire/Hazmat";
-    }
-    
-    if (text.includes("alarm") && (text.includes("building") || text.includes("fire"))) {
-      return "Building Alarm";
-    }
-    
-    // General medical
-    if (text.includes("sick person") || (text.includes("sick") && !text.includes("vehicle"))) {
+    // Apply specific EMS terminology corrections
+    if (text.includes("diabetic") && callType === "Medical Emergency") {
       return "Sick Person";
     }
     
-    // Investigation/assist
-    if (text.includes("assist") || text.includes("welfare") || text.includes("check")) {
-      return "Assist Person";
+    if (text.includes("mvc") || text.includes("motor vehicle")) {
+      return "Vehicle Accident";
     }
     
-    if (text.includes("investigation") || text.includes("unknown problem")) {
-      return "Investigation";
+    if (text.includes("gsw") || text.includes("gunshot wound")) {
+      return "Gunshot Wound";
     }
     
-    // Mass casualty
-    if (text.includes("mass casualty") || text.includes("multiple patients") || text.includes("mci")) {
-      return "Mass Casualty";
-    }
-    
-    // If it's a general medical call
-    if (callType === "Medical Emergency") {
-      // Try to be more specific based on context
-      if (text.includes("person")) {
-        return "Sick Person";
-      }
-      return "Medical Emergency";
-    }
-    
-    // Hospital communications
-    if (callType === "Hospital-EMS Communications") {
-      return "EMS-Hospital Communications";
+    if (text.includes("ob") || text.includes("childbirth") || text.includes("pregnancy")) {
+      return "OB/Childbirth";
     }
     
     return callType;

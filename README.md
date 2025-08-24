@@ -46,7 +46,7 @@ chmod +x deploy-macos.sh
 ### After Installation
 
 1. **Access Dashboard**: http://localhost:5000
-2. **Login**: admin/password or methodist/methodist
+2. **Login**: admin/password
 3. **Configure API Keys**: Edit `.env` file with your Anthropic API key
 4. **Start Monitoring**: Emergency calls appear automatically on the map
 

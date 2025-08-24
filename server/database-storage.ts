@@ -556,12 +556,11 @@ export class DatabaseStorage implements IStorage {
 
   async getHospitalCallSegments(hospitalCallId: number): Promise<HospitalCallSegment[]> {
     // First get the segments with their basic information
-    // Order by timestamp to ensure chronological order within each conversation
     const segments = await db
       .select()
       .from(hospitalCallSegments)
       .where(eq(hospitalCallSegments.hospitalCallId, hospitalCallId))
-      .orderBy(hospitalCallSegments.timestamp);
+      .orderBy(hospitalCallSegments.sequenceNumber);
 
     // For each segment, try to get the actual transcript from the calls table
     const segmentsWithTranscripts = await Promise.all(

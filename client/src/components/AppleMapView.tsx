@@ -748,7 +748,7 @@ function AppleMapView({ calls, onCallSelect }: AppleMapViewProps) {
       )}
 
       {/* Map Legend */}
-      <div className="absolute bottom-4 right-4 z-10">
+      <div className="absolute bottom-4 left-4 z-10">
         <Card className="p-3 bg-background/95 backdrop-blur">
           <div className="text-xs font-semibold mb-2">Call Types</div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">

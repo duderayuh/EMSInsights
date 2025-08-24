@@ -38,6 +38,9 @@ interface AudioFile {
   duration: number;
   talkgroup: string;
   audioUrl?: string;
+  title?: string;
+  callType?: string;
+  location?: string;
 }
 
 export function AudioPlaybar() {
@@ -48,8 +51,17 @@ export function AudioPlaybar() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.7);
   const [isMuted, setIsMuted] = useState(false);
-  const [autoplay, setAutoplay] = useState(true); // Default to true for auto-playing
-  const [selectedTalkgroup, setSelectedTalkgroup] = useState<string>("all");
+  // Load autoplay state from sessionStorage
+  const [autoplay, setAutoplay] = useState(() => {
+    const saved = sessionStorage.getItem('audioPlaybarAutoplay');
+    return saved !== null ? saved === 'true' : true; // Default to true
+  });
+  
+  // Default to 10202 (countywide dispatch primary)
+  const [selectedTalkgroup, setSelectedTalkgroup] = useState<string>(() => {
+    const saved = sessionStorage.getItem('audioPlaybarTalkgroup');
+    return saved || "10202";
+  });
   const [currentAudio, setCurrentAudio] = useState<AudioFile | null>(null);
   const [audioQueue, setAudioQueue] = useState<AudioFile[]>([]);
   const processedCallsRef = useRef<Set<string>>(new Set());
@@ -58,11 +70,41 @@ export function AudioPlaybar() {
   // Connect to WebSocket for real-time call updates
   const { calls: liveCalls } = useWebSocket('/ws');
 
-  // Fetch available talkgroups
-  const { data: talkgroups = [] } = useQuery<TalkGroup[]>({
+  // Hardcode the main talkgroups that are always available
+  const defaultTalkgroups: TalkGroup[] = [
+    {
+      talkgroupId: "10202",
+      displayName: "Countywide Dispatch Primary",
+      systemName: "Marion County",
+      category: "Dispatch",
+      isMonitored: true
+    },
+    {
+      talkgroupId: "10258",
+      displayName: "Hospital Communications",
+      systemName: "Marion County",
+      category: "Hospital",
+      isMonitored: true
+    },
+    {
+      talkgroupId: "10270",
+      displayName: "Fire Dispatch",
+      systemName: "Marion County",
+      category: "Fire",
+      isMonitored: true
+    }
+  ];
+  
+  // Fetch available talkgroups from API and merge with defaults
+  const { data: apiTalkgroups = [] } = useQuery<TalkGroup[]>({
     queryKey: ['/api/talkgroups'],
     refetchInterval: 30000,
   });
+  
+  // Merge API talkgroups with defaults, avoiding duplicates
+  const talkgroups = [...defaultTalkgroups, ...apiTalkgroups.filter(tg => 
+    !defaultTalkgroups.some(dt => dt.talkgroupId === tg.talkgroupId)
+  )];
 
   // Track last check time for processing
   const lastCheckTimeRef = useRef<number>(Date.now());
@@ -75,13 +117,13 @@ export function AudioPlaybar() {
     // Find calls that should be auto-played
     const eligibleCalls = liveCalls.filter(call => {
       // Create unique ID for tracking
-      const uniqueId = `${call.id}-${call.audioSegmentId || call.rdioCallId || 'no-audio'}`;
+      const uniqueId = `${call.id}-${call.audioSegmentId || 'no-audio'}`;
       
       // Skip if already processed
       if (processedCallsRef.current.has(uniqueId)) return false;
       
       // Must have audio
-      const hasAudio = call.audioSegmentId || call.rdioCallId;
+      const hasAudio = call.audioSegmentId;
       if (!hasAudio) return false;
       
       // Must have transcript (indicates processing is complete)
@@ -117,7 +159,7 @@ export function AudioPlaybar() {
       
       // Add to queue
       const newAudioFiles: AudioFile[] = sortedCalls.map(call => {
-        const uniqueId = `${call.id}-${call.audioSegmentId || call.rdioCallId || 'no-audio'}`;
+        const uniqueId = `${call.id}-${call.audioSegmentId || 'no-audio'}`;
         processedCallsRef.current.add(uniqueId);
         
         console.log(`[AudioPlaybar] Queuing call ${call.id}: ${call.callType} at ${call.location || 'unknown location'}`);
@@ -125,10 +167,12 @@ export function AudioPlaybar() {
         return {
           id: uniqueId,
           audioSegmentId: call.audioSegmentId,
-          rdioCallId: call.rdioCallId,
-          timestamp: call.timestamp,
+          timestamp: call.timestamp instanceof Date ? call.timestamp.toISOString() : call.timestamp,
           duration: 0,
           talkgroup: call.talkgroup || '',
+          title: `${call.callType || 'Call'} at ${call.location || 'unknown location'}`,
+          callType: call.callType,
+          location: call.location
         };
       });
       
@@ -199,7 +243,7 @@ export function AudioPlaybar() {
         // Auto-play next in queue if autoplay is enabled
         if (audioQueue.length > 0 && autoplay) {
           const nextAudio = audioQueue[0];
-          console.log('[AudioPlaybar] Playing next in queue:', nextAudio.title);
+          console.log('[AudioPlaybar] Playing next in queue:', nextAudio.title || nextAudio.id);
           setCurrentAudio(nextAudio);
           setAudioQueue(prev => prev.slice(1));
         } else if (autoplay) {
@@ -222,8 +266,7 @@ export function AudioPlaybar() {
   useEffect(() => {
     if (currentAudio && wavesurferRef.current) {
       const audioUrl = currentAudio.audioUrl || 
-        (currentAudio.audioSegmentId ? `/api/audio/segment/${currentAudio.audioSegmentId}` :
-         currentAudio.rdioCallId ? `/api/audio/rdio/${currentAudio.rdioCallId}` : null);
+        (currentAudio.audioSegmentId ? `/api/audio/segment/${currentAudio.audioSegmentId}` : null);
       
       if (audioUrl) {
         console.log('Loading audio:', audioUrl);
@@ -259,13 +302,19 @@ export function AudioPlaybar() {
     return () => clearInterval(interval);
   }, []);
   
-  // Log autoplay state changes
+  // Save autoplay state changes to sessionStorage
   useEffect(() => {
     console.log('[AudioPlaybar] Autoplay state changed:', autoplay);
+    sessionStorage.setItem('audioPlaybarAutoplay', String(autoplay));
     if (autoplay) {
       console.log('[AudioPlaybar] Autoplay enabled - will queue new dispatch calls automatically');
     }
   }, [autoplay]);
+  
+  // Save selected talkgroup to sessionStorage
+  useEffect(() => {
+    sessionStorage.setItem('audioPlaybarTalkgroup', selectedTalkgroup);
+  }, [selectedTalkgroup]);
 
   const handlePlayPause = () => {
     if (wavesurferRef.current) {
@@ -292,8 +341,7 @@ export function AudioPlaybar() {
   const handleDownload = async () => {
     if (currentAudio) {
       const audioUrl = currentAudio.audioUrl || 
-        (currentAudio.audioSegmentId ? `/api/audio/segment/${currentAudio.audioSegmentId}` :
-         currentAudio.rdioCallId ? `/api/audio/rdio/${currentAudio.rdioCallId}` : null);
+        (currentAudio.audioSegmentId ? `/api/audio/segment/${currentAudio.audioSegmentId}` : null);
       
       if (audioUrl) {
         try {
@@ -327,8 +375,7 @@ export function AudioPlaybar() {
   const handleCopyLink = async () => {
     if (currentAudio) {
       const audioUrl = currentAudio.audioUrl || 
-        (currentAudio.audioSegmentId ? `/api/audio/segment/${currentAudio.audioSegmentId}` :
-         currentAudio.rdioCallId ? `/api/audio/rdio/${currentAudio.rdioCallId}` : null);
+        (currentAudio.audioSegmentId ? `/api/audio/segment/${currentAudio.audioSegmentId}` : null);
       
       if (audioUrl) {
         const fullUrl = `${window.location.origin}${audioUrl}`;
@@ -376,11 +423,17 @@ export function AudioPlaybar() {
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-700">
                   <SelectItem value="all">All Talkgroups</SelectItem>
-                  {monitoredTalkgroups.map(tg => (
-                    <SelectItem key={tg.talkgroupId} value={tg.talkgroupId}>
-                      {tg.displayName}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="10202">Countywide Dispatch Primary</SelectItem>
+                  <SelectItem value="10258">Hospital Communications</SelectItem>
+                  <SelectItem value="10270">Fire Dispatch</SelectItem>
+                  {monitoredTalkgroups
+                    .filter(tg => !['10202', '10258', '10270'].includes(tg.talkgroupId))
+                    .map(tg => (
+                      <SelectItem key={tg.talkgroupId} value={tg.talkgroupId}>
+                        {tg.displayName}
+                      </SelectItem>
+                    ))
+                  }
                 </SelectContent>
               </Select>
             </div>

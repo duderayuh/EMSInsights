@@ -2278,10 +2278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             'Content-Length': result.audio.length.toString()
           });
           res.end(result.audio);
-        }
-        
-        // Send the audio data as binary
-        res.end(result.audio);
+}
         
       } catch (dbError) {
         if (db) db.close();

@@ -6,8 +6,9 @@ import { HospitalCallsTab } from "@/components/HospitalCallsTab";
 import { HospitalAnalyticsDashboard } from "@/components/HospitalAnalyticsDashboard";
 import PublicHealthAnalytics from "@/pages/PublicHealthAnalytics";
 import IncidentsPage from "@/pages/incidents";
-import { MobileNavigation } from "@/components/MobileNavigation";
 import { MobileDashboard } from "@/components/MobileDashboard";
+import MobileBottomNav from "@/components/MobileBottomNav";
+import MobileHeader from "@/components/MobileHeader";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
@@ -116,68 +117,44 @@ export default function Dashboard() {
   // Mobile Layout
   if (isMobile) {
     return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-foreground">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-foreground">
         {/* Mobile Header */}
-        <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b">
-          <div className="flex items-center gap-3">
-            <MobileNavigation user={user} unreadAlertsCount={unreadAlertsCount} />
-            <div>
-              <h1 className="text-lg font-semibold">EMS Insight</h1>
-              <p className="text-xs text-muted-foreground">
-                {displayStats.activeCalls} active • {displayStats.todayTotal} today
-              </p>
+        <MobileHeader />
+        
+        {/* Content Area with padding for fixed header and bottom nav */}
+        <div className="pt-14 pb-16 h-screen overflow-hidden">
+          <div className="h-full overflow-y-auto">
+            {/* Stats Overview */}
+            <div className="bg-white dark:bg-gray-800 border-b px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">
+                    {displayStats.activeCalls} Active Calls
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {displayStats.todayTotal} calls today
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full animate-pulse ${connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <span className="text-xs font-medium">
+                    {connectionStatus === 'connected' ? 'Live' : 'Offline'}
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-xs text-muted-foreground">
-              {connectionStatus === 'connected' ? 'Live' : 'Offline'}
-            </span>
+
+            {/* Main Content */}
+            <div className="p-4">
+              <MobileDashboard />
+            </div>
           </div>
         </div>
 
-        {/* Mobile Dashboard Content */}
-        <Tabs defaultValue="dashboard" className="flex-1">
-          <div className="px-4 pt-2 pb-0">
-            <TabsList className="grid w-full grid-cols-2 gap-1">
-              <TabsTrigger value="dashboard" className="text-xs px-2">Dispatch</TabsTrigger>
-              <TabsTrigger value="incidents" className="text-xs px-2">Unit Tracking</TabsTrigger>
-            </TabsList>
-            {hasAdminAccess && (
-              <TabsList className="grid w-full grid-cols-3 gap-1 mt-1">
-                <TabsTrigger value="hospital" className="text-xs px-1">Hospital</TabsTrigger>
-                <TabsTrigger value="analytics" className="text-xs px-1">Analytics</TabsTrigger>
-                <TabsTrigger value="public-health" className="text-xs px-1">Public Health</TabsTrigger>
-              </TabsList>
-            )}
-          </div>
-          
-          <TabsContent value="dashboard" className="m-0 px-4 pb-4">
-            <MobileDashboard />
-          </TabsContent>
-          
-          <TabsContent value="incidents" className="m-0 h-[calc(100vh-180px)] overflow-y-auto">
-            <IncidentsPage />
-          </TabsContent>
-          
-          {hasAdminAccess && (
-            <>
-              <TabsContent value="hospital" className="m-0 h-[calc(100vh-180px)] overflow-y-auto">
-                <HospitalCallsTab />
-              </TabsContent>
-              
-              <TabsContent value="analytics" className="m-0 h-[calc(100vh-180px)] overflow-y-auto">
-                <HospitalAnalyticsDashboard />
-              </TabsContent>
-              
-              <TabsContent value="public-health" className="m-0 h-[calc(100vh-180px)] overflow-y-auto">
-                <PublicHealthAnalytics />
-              </TabsContent>
-            </>
-          )}
-        </Tabs>
+        {/* Bottom Navigation */}
+        <MobileBottomNav />
 
+        {/* Modals */}
         {selectedCall && (
           <CallDetailModal
             call={selectedCall}

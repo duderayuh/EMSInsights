@@ -615,7 +615,7 @@ function AppleMapView({ calls, onCallSelect }: AppleMapViewProps) {
               </Button>
               
               {showTimeFilterDropdown && (
-                <Card className="absolute top-full mt-1 left-0 p-2 bg-background/95 backdrop-blur">
+                <Card className="absolute top-full mt-1 left-0 p-2 bg-background/95 backdrop-blur z-50">
                   <div className="flex flex-col gap-1">
                     {['1h', '6h', '12h', '24h', '48h', '7d', 'all'].map(filter => (
                       <Button

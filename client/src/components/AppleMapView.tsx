@@ -747,11 +747,11 @@ function AppleMapView({ calls, onCallSelect }: AppleMapViewProps) {
         </Card>
       )}
 
-      {/* Map Legend */}
-      <div className="absolute bottom-4 left-4 z-10">
-        <Card className="p-3 bg-background/95 backdrop-blur">
+      {/* Map Legend - Positioned below upper left controls */}
+      <div className="absolute top-64 left-4 z-10">
+        <Card className="p-3 bg-background/95 backdrop-blur w-36">
           <div className="text-xs font-semibold mb-2">Call Types</div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+          <div className="flex flex-col gap-1 text-xs">
             <div>🏥 Medical</div>
             <div>🚗 Vehicle</div>
             <div>🔥 Fire</div>

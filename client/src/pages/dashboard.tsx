@@ -122,8 +122,8 @@ export default function Dashboard() {
         {/* Mobile Header */}
         <MobileHeader />
         
-        {/* Content Area with padding for fixed header and bottom nav */}
-        <div className="pt-14 pb-16 h-screen overflow-hidden">
+        {/* Content Area with padding for fixed header, bottom nav, and AudioPlaybar */}
+        <div className="pt-14 pb-32 h-screen overflow-hidden"> {/* Increased bottom padding for AudioPlaybar + bottom nav */}
           <div className="h-full overflow-y-auto">
             {/* Stats Overview */}
             <div className="bg-white dark:bg-gray-800 border-b px-4 py-3">
@@ -200,7 +200,7 @@ export default function Dashboard() {
         </div>
         
         <TabsContent value="dashboard" className="m-0 h-[calc(100vh-120px)]">
-          <div className="flex h-full overflow-hidden pb-16">
+          <div className="flex h-[calc(100%-80px)] overflow-hidden"> {/* Reduced height for AudioPlaybar */}
             <CallFeedSidebar
               calls={filteredCalls}
               onCallSelect={handleCallSelect}
@@ -218,19 +218,19 @@ export default function Dashboard() {
           <AudioPlaybar />
         </TabsContent>
         
-        <TabsContent value="hospital" className="m-0 h-[calc(100vh-120px)]">
+        <TabsContent value="hospital" className="m-0 h-[calc(100vh-200px)]"> {/* Added padding for AudioPlaybar */}
           <HospitalCallsTab />
         </TabsContent>
         
-        <TabsContent value="analytics" className="m-0 h-[calc(100vh-120px)] overflow-y-auto">
+        <TabsContent value="analytics" className="m-0 h-[calc(100vh-200px)] overflow-y-auto"> {/* Added padding for AudioPlaybar */}
           <HospitalAnalyticsDashboard />
         </TabsContent>
         
-        <TabsContent value="public-health" className="m-0 h-[calc(100vh-120px)] overflow-y-auto">
+        <TabsContent value="public-health" className="m-0 h-[calc(100vh-200px)] overflow-y-auto"> {/* Added padding for AudioPlaybar */}
           <PublicHealthAnalytics />
         </TabsContent>
         
-        <TabsContent value="incidents" className="m-0 h-[calc(100vh-120px)] overflow-y-auto">
+        <TabsContent value="incidents" className="m-0 h-[calc(100vh-200px)] overflow-y-auto"> {/* Added padding for AudioPlaybar */}
           <IncidentsPage />
         </TabsContent>
       </Tabs>

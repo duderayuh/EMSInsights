@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 interface AppleMapViewProps {
   calls: Call[];
   onCallSelect?: (call: Call) => void;
+  newCallIds?: Set<number>;
 }
 
 declare global {
@@ -36,7 +37,7 @@ const HOSPITALS = [
   { name: "IU Health West Hospital", lat: 39.7482, lng: -86.3719, type: "General" }
 ];
 
-function AppleMapView({ calls, onCallSelect }: AppleMapViewProps) {
+function AppleMapView({ calls, onCallSelect, newCallIds }: AppleMapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersMapRef = useRef<Map<number, any>>(new Map());
@@ -358,11 +359,12 @@ function AppleMapView({ calls, onCallSelect }: AppleMapViewProps) {
       );
 
       const emoji = getCallTypeEmoji(mostRecentCall.callType || 'Unknown');
+      const isNewCall = newCallIds?.has(mostRecentCall.id) || false;
       
       // Create custom annotation with emoji
       const annotation = new window.mapkit.Annotation(coordinate, (coordinate: any, options: any) => {
         const div = document.createElement('div');
-        div.className = 'apple-map-marker';
+        div.className = isNewCall ? 'apple-map-marker pulse-marker' : 'apple-map-marker';
         div.style.fontSize = '24px';
         div.style.cursor = 'pointer';
         div.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))';
@@ -395,7 +397,7 @@ function AppleMapView({ calls, onCallSelect }: AppleMapViewProps) {
       markersMapRef.current.set(mostRecentCall.id, annotation);
     });
 
-  }, [getFilteredCalls, isLoaded, onCallSelect]);
+  }, [getFilteredCalls, isLoaded, onCallSelect, newCallIds]);
 
   // Handle hospital overlay
   useEffect(() => {

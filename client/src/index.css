@@ -192,6 +192,26 @@ html {
   }
 }
 
+/* Pulsing animation for new call markers on Apple Maps */
+@keyframes pulse-marker {
+  0% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.6);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+.pulse-marker {
+  animation: pulse-marker 2s ease-in-out infinite;
+}
+
 /* Custom scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;

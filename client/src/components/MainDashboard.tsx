@@ -7,9 +7,10 @@ interface MainDashboardProps {
   calls: Call[];
   stats: any;
   onCallSelect: (call: Call) => void;
+  newCallIds?: Set<number>;
 }
 
-export function MainDashboard({ calls, stats, onCallSelect }: MainDashboardProps) {
+export function MainDashboard({ calls, stats, onCallSelect, newCallIds }: MainDashboardProps) {
   const chartsInitialized = useRef(false);
 
   useEffect(() => {
@@ -46,7 +47,7 @@ export function MainDashboard({ calls, stats, onCallSelect }: MainDashboardProps
       {/* Map View */}
       <div className="flex-1 relative">
         {/* Apple Maps Container */}
-        <AppleMapView calls={calls} onCallSelect={onCallSelect} />
+        <AppleMapView calls={calls} onCallSelect={onCallSelect} newCallIds={newCallIds} />
         
         {/* Fallback for when map is loading */}
         {calls.length === 0 && (

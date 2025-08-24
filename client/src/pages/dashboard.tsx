@@ -22,6 +22,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("10202");
   const [isMobile, setIsMobile] = useState(false);
+  const [newCallIds, setNewCallIds] = useState<Set<number>>(new Set());
   
   const { user, hasAdminAccess } = useAuth();
   const isAdmin = hasAdminAccess; // Use hasAdminAccess for admin features
@@ -87,6 +88,28 @@ export default function Dashboard() {
     activeHigh: 0,
     avgResponse: 0
   };
+
+  // Track new calls for highlighting
+  useEffect(() => {
+    if (sidebarCalls.length > 0) {
+      const latestCall = sidebarCalls[0];
+      const callAge = Date.now() - new Date(latestCall.timestamp).getTime();
+      
+      // If call is less than 30 seconds old, mark as new
+      if (callAge < 30000 && !newCallIds.has(latestCall.id)) {
+        setNewCallIds(prev => new Set([...Array.from(prev), latestCall.id]));
+        
+        // Remove new status after 10 seconds
+        setTimeout(() => {
+          setNewCallIds(prev => {
+            const updated = new Set(prev);
+            updated.delete(latestCall.id);
+            return updated;
+          });
+        }, 10000);
+      }
+    }
+  }, [sidebarCalls, newCallIds]);
 
   const handleCallSelect = (call: Call) => {
     setSelectedCall(call);
@@ -207,12 +230,14 @@ export default function Dashboard() {
               onSearch={handleSearch}
               onPriorityFilter={handlePriorityFilter}
               isLoading={searchQuery ? isSearching : isLoading}
+              newCallIds={newCallIds}
             />
             
             <MainDashboard
               calls={allCalls}
               stats={displayStats}
               onCallSelect={handleCallSelect}
+              newCallIds={newCallIds}
             />
           </div>
           <AudioPlaybar />

@@ -943,6 +943,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Confidence monitoring endpoints
+  app.get("/api/confidence/metrics", requireAuth, async (req, res) => {
+    try {
+      const { confidenceMonitor } = await import('./services/confidence-monitor');
+      const hours = parseInt(req.query.hours as string) || 24;
+      const metrics = await confidenceMonitor.getConfidenceMetrics(hours);
+      res.json(metrics);
+    } catch (error) {
+      console.error('Error fetching confidence metrics:', error);
+      res.status(500).json({ error: "Failed to fetch confidence metrics" });
+    }
+  });
+
+  app.get("/api/confidence/report", requireAuth, async (req, res) => {
+    try {
+      const { confidenceMonitor } = await import('./services/confidence-monitor');
+      const report = await confidenceMonitor.generateQualityReport();
+      res.json(report);
+    } catch (error) {
+      console.error('Error generating quality report:', error);
+      res.status(500).json({ error: "Failed to generate quality report" });
+    }
+  });
+
+  app.get("/api/confidence/realtime", requireAuth, async (req, res) => {
+    try {
+      const { confidenceMonitor } = await import('./services/confidence-monitor');
+      const stats = await confidenceMonitor.getRealTimeStats();
+      res.json(stats);
+    } catch (error) {
+      console.error('Error fetching real-time stats:', error);
+      res.status(500).json({ error: "Failed to fetch real-time confidence stats" });
+    }
+  });
+
+  app.get("/api/confidence/retry-candidates", requireAuth, async (req, res) => {
+    try {
+      const { confidenceMonitor } = await import('./services/confidence-monitor');
+      const threshold = parseFloat(req.query.threshold as string) || 0.7;
+      const segments = await confidenceMonitor.getSegmentsForRetry(threshold);
+      res.json({ segments, count: segments.length });
+    } catch (error) {
+      console.error('Error fetching retry candidates:', error);
+      res.status(500).json({ error: "Failed to fetch retry candidates" });
+    }
+  });
+
+  // Test endpoint for transcription quality improvements
+  app.post("/api/test/transcription-quality", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { text } = req.body;
+      if (!text) {
+        return res.status(400).json({ error: "Test text required" });
+      }
+
+      const { emsDictionary } = await import('./services/ems-dictionary');
+      
+      // Apply EMS dictionary corrections
+      const corrected = emsDictionary.correctTranscript(text);
+      const entities = emsDictionary.extractEntities(corrected);
+      const isValid = emsDictionary.isValidEMSTranscript(corrected);
+      const confidenceBoost = emsDictionary.getConfidenceBoost(text, corrected);
+      
+      res.json({
+        original: text,
+        corrected,
+        entities,
+        isValidEMS: isValid,
+        confidenceBoost: (confidenceBoost * 100).toFixed(1) + '%',
+        improvements: {
+          hadUnitCorrections: entities.units.length > 0,
+          hadHospitalCorrections: entities.hospitals.length > 0,
+          hadAddressCorrections: entities.addresses.length > 0,
+          hadMedicalCorrections: entities.medical.length > 0
+        }
+      });
+    } catch (error) {
+      console.error('Error testing transcription quality:', error);
+      res.status(500).json({ error: "Failed to test transcription quality" });
+    }
+  });
+
   // Register analytics routes
   app.use("/api/analytics", analyticsRoutes);
 

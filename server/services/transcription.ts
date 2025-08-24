@@ -11,6 +11,9 @@ import { EventEmitter } from 'events';
 import OpenAI from 'openai';
 import { audioPreprocessor } from './audio-preprocessor';
 import { postProcessingPipeline } from './post-processing-pipeline';
+import { audioEnhancementService } from './audio-enhancement';
+import { emsDictionary } from './ems-dictionary';
+import { confidenceMonitor } from './confidence-monitor';
 
 interface TranscriptionProgress {
   segmentId: string;
@@ -54,7 +57,8 @@ export class TranscriptionService extends EventEmitter {
 
   constructor() {
     super();
-    this.whisperModel = process.env.WHISPER_MODEL || 'tiny';
+    // Use larger Whisper model for better accuracy
+    this.whisperModel = process.env.WHISPER_MODEL || 'small';
     
     // Initialize OpenAI client if API key is available
     if (process.env.OPENAI_API_KEY) {
@@ -146,6 +150,23 @@ export class TranscriptionService extends EventEmitter {
     this.emitProgress(segmentId, 'starting', 5, 'Analyzing audio for voice content');
     const audioAnalysis = await audioPreprocessor.analyzeAudio(segment.filepath);
     
+    // Step 1.5: Enhance audio quality for better transcription
+    let enhancedAudioPath: string | null = null;
+    try {
+      // Analyze audio quality first
+      const qualityAnalysis = await audioEnhancementService.analyzeAudioQuality(segment.filepath);
+      console.log(`Audio quality for ${segmentId}: ${qualityAnalysis.quality}, SNR: ${qualityAnalysis.signalToNoiseRatio.toFixed(1)}dB`);
+      
+      // Enhance audio if quality is not excellent
+      if (qualityAnalysis.quality !== 'excellent') {
+        this.emitProgress(segmentId, 'starting', 8, 'Enhancing audio quality for better transcription');
+        enhancedAudioPath = await audioEnhancementService.enhanceEMSAudio(segment.filepath);
+        console.log(`Audio enhanced for ${segmentId} - quality was ${qualityAnalysis.quality}`);
+      }
+    } catch (error) {
+      console.error(`Audio enhancement failed for ${segmentId}, using original:`, error);
+    }
+    
     // If audio is pure noise/beeps, skip Whisper and return beeping transcript
     if (audioAnalysis.isPureNoise) {
       console.log(`Audio segment ${segmentId} detected as pure noise/beeps`);
@@ -163,8 +184,8 @@ export class TranscriptionService extends EventEmitter {
       return result;
     }
 
-    // Step 2: Use trimmed audio if available, otherwise original
-    const audioPathToTranscribe = audioAnalysis.trimmedFilePath || segment.filepath;
+    // Step 2: Use enhanced audio if available, then trimmed, otherwise original
+    const audioPathToTranscribe = enhancedAudioPath || audioAnalysis.trimmedFilePath || segment.filepath;
 
     // Step 3: Transcribe with Whisper (OpenAI first, then local fallback)
     let result: TranscriptionResult;
@@ -173,7 +194,7 @@ export class TranscriptionService extends EventEmitter {
       this.emitProgress(segmentId, 'whisper', 10, 'Starting OpenAI Whisper transcription');
       try {
         result = await this.transcribeWithOpenAI(segmentId, audioPathToTranscribe);
-        console.log(`OpenAI Whisper transcription successful for ${segmentId}`);
+        console.log(`OpenAI Whisper transcription successful for ${segmentId} - confidence: ${(result.confidence * 100).toFixed(1)}%`);
       } catch (error) {
         console.error(`OpenAI Whisper failed for ${segmentId}, falling back to local:`, error);
         this.emitProgress(segmentId, 'whisper', 10, 'OpenAI failed, using local Whisper');
@@ -204,9 +225,12 @@ export class TranscriptionService extends EventEmitter {
     (result as any).isHallucination = postProcessed.isHallucination;
     (result as any).parseErrors = postProcessed.parseErrors;
 
-    // Clean up trimmed file if it was created
+    // Clean up temporary files
     if (audioAnalysis.trimmedFilePath && audioAnalysis.trimmedFilePath !== segment.filepath) {
       await audioPreprocessor.cleanupTrimmedFile(audioAnalysis.trimmedFilePath);
+    }
+    if (enhancedAudioPath) {
+      await audioEnhancementService.cleanupEnhancedFile(enhancedAudioPath);
     }
 
     // Complete transcription
@@ -518,32 +542,77 @@ except Exception as e:
         response_format: 'verbose_json',
         language: 'en',
         // EXACT PROMPT AS PROVIDED BY USER
-        prompt: 'You are an expert at interpreting Indianapolis-Marion County EMS and hospital radio traffic.\n1 Identify EMS unit IDs, fire unit IDs, exact incident addresses or intersections.\n2 Identify the call-type (e.g. Assault, MVC, Cardiac Arrest, Trash Fire, Sick Person).\n3 Use 24-hour time if present.\n4 If audio contains ONLY electronic tones, beeps, or static, output exactly `{beeping}` and nothing else.\n5 Never invent text that was not spoken.\n6 For unclear audio use `[inaudible]`.\nReturn verbatim speech otherwise.',
+        prompt: emsDictionary.generateWhisperPrompt(),
         temperature: 0.0  // Use lowest temperature for most deterministic transcription
       });
 
       this.emitProgress(segmentId, 'whisper', 60, 'Processing OpenAI transcription response');
 
-      // Calculate confidence based on OpenAI verbose response
+      // Enhanced confidence calculation based on OpenAI verbose response
       let confidence = 0.85; // Default confidence
       
-      // If we have segments data, calculate average confidence from log probabilities
+      // If we have segments data, calculate weighted confidence from log probabilities
       if (transcription.segments && transcription.segments.length > 0) {
-        const avgLogProb = transcription.segments.reduce((sum: number, segment: any) => {
-          return sum + (segment.avg_logprob || -1.0);
-        }, 0) / transcription.segments.length;
+        // More sophisticated confidence calculation
+        const segmentConfidences = transcription.segments.map((segment: any) => {
+          if (segment.avg_logprob !== undefined) {
+            // Convert log probability to confidence
+            // Log probs typically range from -2 to 0, where 0 is highest confidence
+            const normalizedProb = Math.exp(segment.avg_logprob);
+            
+            // Apply quality modifiers based on segment properties
+            let segmentConfidence = normalizedProb;
+            
+            // Boost confidence if segment has no hesitations/repetitions
+            if (segment.no_speech_prob && segment.no_speech_prob < 0.1) {
+              segmentConfidence *= 1.1;
+            }
+            
+            // Reduce confidence for very short segments (likely noise)
+            const segmentDuration = (segment.end || 0) - (segment.start || 0);
+            if (segmentDuration < 0.5) {
+              segmentConfidence *= 0.8;
+            }
+            
+            return Math.min(0.99, segmentConfidence);
+          }
+          return 0.85; // Default if no logprob available
+        });
         
-        // Convert log probability to confidence (higher is better, closer to 0)
-        // Typical range: -2.0 (poor) to -0.1 (excellent)
-        confidence = Math.max(0.1, Math.min(0.95, 1.0 + (avgLogProb / 2.0)));
+        // Calculate weighted average based on segment duration
+        const durations = transcription.segments.map((seg: any) => (seg.end || 0) - (seg.start || 0));
+        const totalDuration = durations.reduce((sum: number, d: number) => sum + d, 0);
+        
+        if (totalDuration > 0) {
+          confidence = transcription.segments.reduce((sum: number, seg: any, i: number) => {
+            const weight = durations[i] / totalDuration;
+            return sum + (segmentConfidences[i] * weight);
+          }, 0);
+        } else {
+          confidence = segmentConfidences.reduce((sum: number, c: number) => sum + c, 0) / segmentConfidences.length;
+        }
+        
+        // Apply text quality modifiers
+        const textLength = transcription.text?.length || 0;
+        const hasNumbers = /\d/.test(transcription.text || '');
+        const hasUnits = /(medic|engine|fire|ambulance|ems|squad|battalion|ladder)\s*\d+/i.test(transcription.text || '');
+        const hasAddresses = /\d+\s+[NSEW]?\s*\w+\s+(street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr)/i.test(transcription.text || '');
+        
+        // Boost confidence for high-quality indicators
+        if (hasUnits) confidence *= 1.05;
+        if (hasAddresses) confidence *= 1.05;
+        if (textLength > 20 && textLength < 500) confidence *= 1.02; // Reasonable length
+        
+        // Ensure confidence is in valid range [0.1, 0.99]
+        confidence = Math.min(0.99, Math.max(0.1, confidence));
       } else {
-        // Fallback confidence based on text length and quality
+        // Fallback confidence based on text quality
         const textLength = transcription.text?.length || 0;
         const hasNumbers = /\d/.test(transcription.text || '');
         const hasCommonWords = /(medic|engine|fire|ambulance|dispatch|location|street|avenue|road)/i.test(transcription.text || '');
         
         confidence = textLength > 10 ? 0.8 : 0.6;
-        if (hasNumbers && hasCommonWords) confidence += 0.1;
+        if (hasNumbers && hasCommonWords) confidence += 0.15;
       }
       
       // Quality threshold: reject very low confidence transcriptions
@@ -551,11 +620,30 @@ except Exception as e:
         throw new Error(`Low confidence transcription rejected: ${confidence.toFixed(2)}`);
       }
       
-      console.log(`OpenAI Whisper confidence: ${confidence.toFixed(2)} for transcript: "${(transcription.text || '').substring(0, 100)}..."`);
+      // Apply EMS dictionary corrections
+      const originalText = transcription.text || '';
+      const correctedText = emsDictionary.correctTranscript(originalText);
+      
+      // Get confidence boost from corrections
+      const confidenceBoost = emsDictionary.getConfidenceBoost(originalText, correctedText);
+      const finalConfidence = Math.min(0.99, confidence + confidenceBoost);
+      
+      // Track confidence for monitoring
+      await confidenceMonitor.trackSegmentConfidence(segmentId, finalConfidence);
+      
+      // Log detailed confidence metrics
+      console.log(`OpenAI Whisper confidence metrics:`, {
+        confidence: (finalConfidence * 100).toFixed(1) + '%',
+        original_confidence: (confidence * 100).toFixed(1) + '%',
+        confidence_boost: (confidenceBoost * 100).toFixed(1) + '%',
+        segments: transcription.segments?.length || 0,
+        duration: transcription.duration || 0,
+        text_preview: correctedText.substring(0, 100)
+      });
       
       return {
-        utterance: transcription.text || '[No transcription available]',
-        confidence: confidence,
+        utterance: correctedText || '[No transcription available]',
+        confidence: finalConfidence,
         start_ms: 0,
         end_ms: Math.round((transcription.duration || 5) * 1000)
       };

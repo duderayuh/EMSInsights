@@ -34,6 +34,7 @@ import { VoiceTypeClassifier } from "./services/voice-type-classifier";
 import { unitExtractor } from "./services/unit-extractor";
 import { transcriptionFixer } from "./scripts/fix-transcriptions";
 import { analyticsRoutes } from "./analytics.routes";
+import { appleMapKitTokenService } from "./services/apple-mapkit-token";
 
 let wsService: WebSocketService;
 
@@ -712,6 +713,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching Google Maps API key:', error);
       res.status(500).json({ error: "Failed to fetch Google Maps API key" });
+    }
+  });
+
+  // Get Apple MapKit JS token for frontend
+  app.get("/api/config/apple-mapkit-token", async (req, res) => {
+    try {
+      // Check if we have a JWT token in the environment
+      const mapkitToken = process.env.APPLE_MAPKIT_JS_TOKEN;
+      
+      if (mapkitToken) {
+        // We have the JWT token directly
+        console.log('Using Apple MapKit JWT token from APPLE_MAPKIT_JS_TOKEN environment variable');
+        res.json({ token: mapkitToken });
+      } else {
+        // Fallback to check the old variable or try to generate
+        const mapkitKey = process.env.APPLE_MAPKIT_JS_KEY;
+        
+        if (mapkitKey && mapkitKey.startsWith('ey')) {
+          // It's likely already a JWT token, use it directly
+          console.log('Using Apple MapKit JWT token from APPLE_MAPKIT_JS_KEY environment variable');
+          res.json({ token: mapkitKey });
+        } else if (appleMapKitTokenService.isConfigured()) {
+          // Try to generate one if we have the necessary components
+          try {
+            const token = appleMapKitTokenService.generateToken();
+            res.json({ token });
+          } catch (genError) {
+            console.error('Failed to generate token:', genError);
+            return res.status(500).json({ error: "Failed to generate Apple MapKit JS token" });
+          }
+        } else {
+          return res.status(500).json({ error: "Apple MapKit JS not configured. Please provide APPLE_MAPKIT_JS_TOKEN environment variable" });
+        }
+      }
+    } catch (error) {
+      console.error('Error handling Apple MapKit JS token:', error);
+      res.status(500).json({ error: "Failed to handle Apple MapKit JS token" });
     }
   });
 

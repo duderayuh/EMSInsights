@@ -249,25 +249,44 @@ function AppleMapView({ calls, onCallSelect }: AppleMapViewProps) {
         return;
       }
 
-      // Load MapKit JS
-      const script = document.createElement('script');
-      script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js';
-      script.crossOrigin = 'anonymous';
-      script.dataset.libraries = 'map,services,annotations,overlays';
-      script.dataset.initialToken = 'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Ik5DUTk1OFo4V1gifQ.eyJpc3MiOiJTNFg2Nzg5VEo0IiwiaWF0IjoxNzU2MDQxNjAwLCJleHAiOjE3ODc1Nzc2MDB9.v5CvOhPfPDlqF3zxZP1-T8zwBnM7-ejQpkTfJNTy4kSw0BPKzJRzddRXQygjHyP6pUGJQMeOL25hWMQKvWHgEw';
-      
-      script.onload = () => {
-        if (window.mapkit) {
-          window.mapkit.init({
-            authorizationCallback: function(done: any) {
-              done('eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Ik5DUTk1OFo4V1gifQ.eyJpc3MiOiJTNFg2Nzg5VEo0IiwiaWF0IjoxNzU2MDQxNjAwLCJleHAiOjE3ODc1Nzc2MDB9.v5CvOhPfPDlqF3zxZP1-T8zwBnM7-ejQpkTfJNTy4kSw0BPKzJRzddRXQygjHyP6pUGJQMeOL25hWMQKvWHgEw');
-            }
-          });
-          initializeMap();
+      try {
+        // Fetch the Apple MapKit token from the API
+        const response = await fetch('/api/config/apple-mapkit-token');
+        if (!response.ok) {
+          throw new Error('Failed to fetch Apple MapKit token');
         }
-      };
+        const { token } = await response.json();
+        
+        if (!token) {
+          throw new Error('Apple MapKit token not configured');
+        }
 
-      document.head.appendChild(script);
+        // Load MapKit JS
+        const script = document.createElement('script');
+        script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js';
+        script.crossOrigin = 'anonymous';
+        script.dataset.libraries = 'map,services,annotations,overlays';
+        script.dataset.initialToken = token;
+        
+        script.onload = () => {
+          if (window.mapkit) {
+            window.mapkit.init({
+              authorizationCallback: function(done: any) {
+                done(token);
+              }
+            });
+            initializeMap();
+          }
+        };
+
+        script.onerror = () => {
+          console.error('Failed to load Apple MapKit JS');
+        };
+
+        document.head.appendChild(script);
+      } catch (error) {
+        console.error('Failed to initialize Apple MapKit:', error);
+      }
     };
 
     const initializeMap = () => {

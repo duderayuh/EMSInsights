@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import { GoogleMapView } from '@/components/GoogleMapView';
+import AppleMapView from '@/components/AppleMapView';
 import { format } from 'date-fns';
 
 interface PublicHealthSummary {
@@ -171,16 +171,36 @@ export default function PublicHealthAnalytics() {
     return chartData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [trends, selectedComplaint]);
 
-  // Create map markers from clusters
+  // Create map markers from clusters - convert to Call format for AppleMapView
   const mapMarkers = React.useMemo(() => {
     if (!summary?.recentClusters) return [];
     
     return summary.recentClusters.map((cluster, idx) => ({
-      id: `cluster-${idx}`,
-      position: { lat: cluster.latitude, lng: cluster.longitude },
-      title: `${cluster.chiefComplaint} (${cluster.count} calls)`,
-      type: cluster.chiefComplaint.toLowerCase(),
-      color: getComplaintColor(cluster.chiefComplaint)
+      id: idx + 1000, // Unique numeric ID for map markers
+      timestamp: new Date(),
+      audioSegmentId: `cluster-${idx}`,
+      transcript: null,
+      confidence: null,
+      startMs: null,
+      endMs: null,
+      metadata: null,
+      duration: null,
+      callType: cluster.chiefComplaint,
+      priority: 'medium' as const,
+      location: `${cluster.chiefComplaint} cluster area`,
+      latitude: cluster.latitude,
+      longitude: cluster.longitude,
+      incidentNumber: null,
+      source: 'analytics' as const,
+      status: 'active' as const,
+      confidence_score: null,
+      units: null,
+      notes: `${cluster.count} calls in this area`,
+      isTest: false,
+      rdioCallId: null,
+      incidentId: null,
+      createdAt: new Date(),
+      updatedAt: null
     }));
   }, [summary]);
 
@@ -374,10 +394,8 @@ export default function PublicHealthAnalytics() {
             </CardHeader>
             <CardContent>
               <div className="h-[600px]">
-                <GoogleMapView
+                <AppleMapView
                   calls={mapMarkers}
-                  showOverlays={false}
-                  showDispatchOverlay={false}
                 />
               </div>
               

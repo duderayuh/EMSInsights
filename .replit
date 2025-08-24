@@ -11,7 +11,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["ffmpeg", "ffmpeg-full", "netcat-openbsd", "pkg-config", "python3", "gcc", "glibc", "libstdcxx5", "libgcc", "gcc-unwrapped", "unzip", "sqlite", "jq"]
+packages = ["ffmpeg", "ffmpeg-full", "netcat-openbsd", "pkg-config", "python3", "gcc", "glibc", "libstdcxx5", "libgcc", "gcc-unwrapped", "unzip", "sqlite", "jq", "rsync"]
 
 [deployment]
 deploymentTarget = "gce"

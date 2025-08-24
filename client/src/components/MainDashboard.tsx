@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { MapPin } from "lucide-react";
 import { Call } from "@shared/schema";
-import { GoogleMapView } from "./GoogleMapView";
+import AppleMapView from "./AppleMapView";
 
 interface MainDashboardProps {
   calls: Call[];
@@ -28,7 +28,7 @@ export function MainDashboard({ calls, stats, onCallSelect }: MainDashboardProps
       }
     };
     
-    // Tab visibility handlers are now handled within GoogleMapView component
+    // Tab visibility handlers are now handled within AppleMapView component
     
     // Cleanup function
     return () => {
@@ -45,8 +45,8 @@ export function MainDashboard({ calls, stats, onCallSelect }: MainDashboardProps
     <main className="flex-1 flex flex-col">
       {/* Map View */}
       <div className="flex-1 relative">
-        {/* Google Maps Container */}
-        <GoogleMapView calls={calls} onCallSelect={onCallSelect} />
+        {/* Apple Maps Container */}
+        <AppleMapView calls={calls} onCallSelect={onCallSelect} />
         
         {/* Fallback for when map is loading */}
         {calls.length === 0 && (

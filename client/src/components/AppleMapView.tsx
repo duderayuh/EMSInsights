@@ -645,13 +645,17 @@ function AppleMapView({ calls, onCallSelect, newCallIds }: AppleMapViewProps) {
           variant={hospitalOverlayEnabled ? "default" : "outline"}
           size="sm"
           onClick={() => setHospitalOverlayEnabled(!hospitalOverlayEnabled)}
-          className="bg-background/95 backdrop-blur w-36"
+          className="bg-background/95 backdrop-blur w-36 overflow-hidden"
         >
-          <Building className="h-4 w-4 mr-1" />
-          Hospitals
-          {hospitalOverlayEnabled && (
-            <Eye className="h-4 w-4 ml-2" />
-          )}
+          <span className="flex items-center justify-between w-full">
+            <span className="flex items-center">
+              <Building className="h-4 w-4 mr-1 flex-shrink-0" />
+              <span className="truncate">Hospitals</span>
+            </span>
+            {hospitalOverlayEnabled && (
+              <Eye className="h-4 w-4 ml-1 flex-shrink-0" />
+            )}
+          </span>
         </Button>
 
         {/* Cluster Analysis Control */}
@@ -662,10 +666,12 @@ function AppleMapView({ calls, onCallSelect, newCallIds }: AppleMapViewProps) {
             setClusterOverlayEnabled(!clusterOverlayEnabled);
             setShowClusterPanel(!showClusterPanel);
           }}
-          className="bg-background/95 backdrop-blur w-36"
+          className="bg-background/95 backdrop-blur w-36 overflow-hidden"
         >
-          <Filter className="h-4 w-4 mr-1" />
-          Cluster Analysis
+          <span className="flex items-center">
+            <Filter className="h-4 w-4 mr-1 flex-shrink-0" />
+            <span className="truncate">Cluster Analysis</span>
+          </span>
         </Button>
 
         {/* Aircraft Overlay Control */}
@@ -673,15 +679,19 @@ function AppleMapView({ calls, onCallSelect, newCallIds }: AppleMapViewProps) {
           variant={aircraftOverlayEnabled ? "default" : "outline"}
           size="sm"
           onClick={() => setAircraftOverlayEnabled(!aircraftOverlayEnabled)}
-          className="bg-background/95 backdrop-blur w-36"
+          className="bg-background/95 backdrop-blur w-36 overflow-hidden"
         >
-          <Plane className="h-4 w-4 mr-1" />
-          Aircraft
-          {aircraftOverlayEnabled && aircraftData.length > 0 && (
-            <Badge variant="secondary" className="ml-2">
-              {aircraftData.length}
-            </Badge>
-          )}
+          <span className="flex items-center justify-between w-full">
+            <span className="flex items-center">
+              <Plane className="h-4 w-4 mr-1 flex-shrink-0" />
+              <span className="truncate">Aircraft</span>
+            </span>
+            {aircraftOverlayEnabled && aircraftData.length > 0 && (
+              <Badge variant="secondary" className="ml-1 flex-shrink-0">
+                {aircraftData.length}
+              </Badge>
+            )}
+          </span>
         </Button>
 
         {/* Weather Overlay Control */}
@@ -689,10 +699,12 @@ function AppleMapView({ calls, onCallSelect, newCallIds }: AppleMapViewProps) {
           variant={weatherOverlayEnabled ? "default" : "outline"}
           size="sm"
           onClick={() => setWeatherOverlayEnabled(!weatherOverlayEnabled)}
-          className="bg-background/95 backdrop-blur w-36"
+          className="bg-background/95 backdrop-blur w-36 overflow-hidden"
         >
-          <Cloud className="h-4 w-4 mr-1" />
-          Weather
+          <span className="flex items-center">
+            <Cloud className="h-4 w-4 mr-1 flex-shrink-0" />
+            <span className="truncate">Weather</span>
+          </span>
         </Button>
       </div>
 

@@ -1,0 +1,70 @@
+root@indyinsights:~/EMSInsights# pm2 logs ems-insight --lines 30
+[TAILING] Tailing last 30 lines for [ems-insight] process (change the value with --lines option)
+/root/.pm2/logs/ems-insight-error.log last 30 lines:
+0|ems-insi |     at internalConnectMultiple (node:net:1122:18)
+0|ems-insi |     at afterConnectMultiple (node:net:1689:7) {
+0|ems-insi |   code: 'ECONNREFUSED',
+0|ems-insi |   [errors]: [
+0|ems-insi |     Error: connect ECONNREFUSED ::1:5432
+0|ems-insi |         at createConnectionError (node:net:1652:14)
+0|ems-insi |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insi |       errno: -111,
+0|ems-insi |       code: 'ECONNREFUSED',
+0|ems-insi |       syscall: 'connect',
+0|ems-insi |       address: '::1',
+0|ems-insi |       port: 5432
+0|ems-insi |     },
+0|ems-insi |     Error: connect ECONNREFUSED 127.0.0.1:5432
+0|ems-insi |         at createConnectionError (node:net:1652:14)
+0|ems-insi |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insi |       errno: -111,
+0|ems-insi |       code: 'ECONNREFUSED',
+0|ems-insi |       syscall: 'connect',
+0|ems-insi |       address: '127.0.0.1',
+0|ems-insi |       port: 5432
+0|ems-insi |     }
+0|ems-insi |   ]
+0|ems-insi | }
+0|ems-insi | 
+0|ems-insi | Node.js v20.19.4
+0|ems-insi | [Rdio Scanner Error] 2025/08/24 12:04:48 server started
+0|ems-insi | [Rdio Scanner Error] 2025/08/24 12:04:48 base folder is /root/EMSInsights/rdio-scanner-server
+0|ems-insi | [Rdio Scanner Error] 2025/08/24 12:04:48 main interface at http://indyinsights:3001
+0|ems-insi | 2025/08/24 12:04:48 admin interface at http://indyinsights:3001/admin
+
+/root/.pm2/logs/ems-insight-out.log last 30 lines:
+0|ems-insi | No new calls found, checking for recent hospital calls...
+0|ems-insi | Found 0 recent hospital calls in last 2 hours
+0|ems-insi | Database monitor started successfully
+0|ems-insi | Rdio Scanner database monitoring started successfully
+0|ems-insi | Database monitor started for Rdio Scanner audio extraction
+0|ems-insi | File monitor available as backup
+0|ems-insi | WebSocket client available as backup (currently disabled in favor of database monitoring)
+0|ems-insi | Starting SDRTrunk UDP listener on localhost:9999
+0|ems-insi | Initializing transcription processor for new calls...
+0|ems-insi | Transcription processor initialized and ready for new calls
+0|ems-insi | Starting hospital call processor...
+0|ems-insi | Starting hospital call processor...
+0|ems-insi | SDRTrunk UDP server listening on 127.0.0.1:9999
+0|ems-insi | Audio processor connected
+0|ems-insi | Loaded 0 transcription dictionary entries
+0|ems-insi | Found 0 new calls since last processed ID 0
+0|ems-insi | No new calls found, checking for recent hospital calls...
+0|ems-insi | Found 0 recent hospital calls in last 2 hours
+0|ems-insi | Found 0 new calls since last processed ID 0
+0|ems-insi | No new calls found, checking for recent hospital calls...
+0|ems-insi | Found 0 recent hospital calls in last 2 hours
+0|ems-insi | Found 0 new calls since last processed ID 0
+0|ems-insi | No new calls found, checking for recent hospital calls...
+0|ems-insi | Found 0 recent hospital calls in last 2 hours
+0|ems-insi | Found 0 new calls since last processed ID 0
+0|ems-insi | No new calls found, checking for recent hospital calls...
+0|ems-insi | Found 0 recent hospital calls in last 2 hours
+0|ems-insi | Found 0 new calls since last processed ID 0
+0|ems-insi | No new calls found, checking for recent hospital calls...
+0|ems-insi | Found 0 recent hospital calls in last 2 hours
+
+1|ems-insight  | Found 0 new calls since last processed ID 0
+1|ems-insight  | No new calls found, checking for recent hospital calls...
+1|ems-insight  | Found 0 recent hospital calls in last 2 hours
+^C

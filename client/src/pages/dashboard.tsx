@@ -257,8 +257,8 @@ export default function Dashboard() {
           </div>
         </div>
         
-        <TabsContent value="dashboard" className="m-0 flex-1 flex flex-col overflow-hidden relative">
-          <div className="flex flex-1 overflow-hidden">
+        <TabsContent value="dashboard" className="m-0 flex-1 flex flex-col overflow-hidden">
+          <div className="flex flex-1 overflow-hidden pb-20">
             <CallFeedSidebar
               calls={filteredCalls}
               onCallSelect={handleCallSelect}
@@ -277,22 +277,21 @@ export default function Dashboard() {
               hoveredCallId={hoveredCallId}
             />
           </div>
-          <AudioPlaybar />
         </TabsContent>
         
-        <TabsContent value="hospital" className="m-0 flex-1 pb-20 overflow-hidden">
+        <TabsContent value="hospital" className="m-0 flex-1 overflow-hidden pb-20">
           <HospitalCallsTab />
         </TabsContent>
         
-        <TabsContent value="analytics" className="m-0 flex-1 pb-20 overflow-y-auto">
+        <TabsContent value="analytics" className="m-0 flex-1 overflow-y-auto pb-20">
           <HospitalAnalyticsDashboard />
         </TabsContent>
         
-        <TabsContent value="public-health" className="m-0 flex-1 pb-20 overflow-y-auto">
+        <TabsContent value="public-health" className="m-0 flex-1 overflow-y-auto pb-20">
           <PublicHealthAnalytics />
         </TabsContent>
         
-        <TabsContent value="incidents" className="m-0 flex-1 pb-20 overflow-y-auto">
+        <TabsContent value="incidents" className="m-0 flex-1 overflow-y-auto pb-20">
           <IncidentsPage />
         </TabsContent>
       </Tabs>
@@ -303,6 +302,9 @@ export default function Dashboard() {
           onClose={handleCloseModal}
         />
       )}
+      
+      {/* AudioPlaybar is fixed at bottom */}
+      <AudioPlaybar />
     </div>
   );
 }

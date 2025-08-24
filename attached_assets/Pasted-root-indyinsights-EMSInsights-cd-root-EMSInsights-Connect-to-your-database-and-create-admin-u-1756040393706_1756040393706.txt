@@ -1,0 +1,203 @@
+root@indyinsights:~/EMSInsights# cd /root/EMSInsights
+
+# Connect to your database and create admin user
+node -e "
+const bcrypt = require('bcryptjs');
+const { Client } = require('pg');
+
+async function createAdmin() {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:YOUR_PASSWORD@ep-nameless-bonus-aegajrzu-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require'
+  });
+  
+  await client.connect();
+  
+  const hashedPassword = await bcrypt.hash('admin', 10);
+  
+  try {
+    await client.query(\`
+      INSERT INTO users (username, password, email, role, created_at)
+      VALUES ('admin', '\${hashedPassword}', 'admin@example.com', 'super_admin', NOW())
+      ON CONFLICT (username) DO UPDATE 
+      SET password = '\${hashedPassword}', role = 'super_admin'
+    \`);
+    console.log('Admin user created/updated successfully');
+  } catch (error) {
+    console.error('Error:', error.message);
+  }
+  
+  await client.end();
+}
+
+createAdmin();
+"
+/root/EMSInsights/node_modules/pg-protocol/dist/parser.js:283
+        const message = name === 'notice' ? new messages_1.NoticeMessage(length, messageValue) : new messages_1.DatabaseError(messageValue, length, name);
+                                                                                                 ^
+
+error: password authentication failed for user 'neondb_owner'
+    at Parser.parseErrorMessage (/root/EMSInsights/node_modules/pg-protocol/dist/parser.js:283:98)
+    at Parser.handlePacket (/root/EMSInsights/node_modules/pg-protocol/dist/parser.js:122:29)
+    at Parser.parse (/root/EMSInsights/node_modules/pg-protocol/dist/parser.js:35:38)
+    at TLSSocket.<anonymous> (/root/EMSInsights/node_modules/pg-protocol/dist/index.js:11:42)
+    at TLSSocket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23) {
+  length: 75,
+  severity: 'ERROR',
+  code: 'XX000',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: undefined,
+  line: undefined,
+  routine: undefined
+}
+
+Node.js v20.19.4
+root@indyinsights:~/EMSInsights# cd /root/EMSInsights                            
+                                   
+# Connect to your database and create admin user
+node -e "
+const bcrypt = require('bcryptjs');
+const { Client } = require('pg');
+                                                                                                                                                             async function createAdmin() {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:YOUR_PASSWORD@ep-nameless-bonus-aegajrzu-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require'
+  });
+                                                        
+  await client.connect();
+       
+  const hashedPassword = await bcrypt.hash('admin', 10);
+                                                                     
+  try {                                                                                
+    await client.query(\`
+      INSERT INTO users (username, password, email, role, created_at)
+      VALUES ('admin', '\${hashedPassword}', 'admin@example.com', 'super_admin', NOW())
+      ON CONFLICT (username) DO UPDATE 
+      SET password = '\${hashedPassword}', role = 'super_admin'
+    \`);                                   
+    console.log('Admin user created/updated successfully');
+  } catch (error) {
+    console.error('Error:', error.message);
+  }
+  
+  await client.end();
+}
+
+createAdmin();
+"^C
+root@indyinsights:~/EMSInsights# cd /root/EMSInsights
+
+# Connect to your database and create admin user
+node -e "
+const bcrypt = require('bcryptjs');
+const { Client } = require('pg');
+
+async function createAdmin() {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_GJZCuh9wsX4d@ep-nameless-bonus-aegajrzu-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require'
+  });
+  
+  await client.connect();
+  
+  const hashedPassword = await bcrypt.hash('admin', 10);
+  
+  try {
+    await client.query(\`
+      INSERT INTO users (username, password, email, role, created_at)
+      VALUES ('admin', '\${hashedPassword}', 'admin@example.com', 'super_admin', NOW())
+      ON CONFLICT (username) DO UPDATE 
+      SET password = '\${hashedPassword}', role = 'super_admin'
+    \`);
+    console.log('Admin user created/updated successfully');
+  } catch (error) {
+    console.error('Error:', error.message);
+  }
+  
+  await client.end();
+}
+
+createAdmin();
+"
+Admin user created/updated successfully
+root@indyinsights:~/EMSInsights# pm2 logs ems-insight --lines 50 | grep -i "error\|users"
+^C
+root@indyinsights:~/EMSInsights# cd /root/EMSInsights
+
+# First, check if the users table exists
+cat > check-db.js << 'EOF'
+const { Client } = require('pg');
+const bcrypt = require('bcryptjs');
+
+async function setupDatabase() {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL
+  });
+  
+  try {
+    await client.connect();
+    console.log('Connected to database');
+    
+    // Check if users table exists
+    const tableCheck = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'users'
+      );
+    `);
+    
+    if (!tableCheck.rows[0].exists) {
+      console.log('Users table does not exist. Running db:push...');
+      process.exit(1);
+    }
+    
+    // Create admin user
+    const hashedPassword = await bcrypt.hash('admin', 10);
+    await client.query(`
+      INSERT INTO users (username, password, email, role, created_at)
+      VALUES ('admin', $1, 'admin@example.com', 'super_admin', NOW())
+      ON CONFLICT (username) DO UPDATE 
+      SET password = $1, role = 'super_admin'
+    `, [hashedPassword]);
+    
+    console.log('✅ Admin user created!');
+    console.log('Username: admin');
+    console.log('Password: admin');
+    
+  } catch (error) {
+    console.error('Error:', error.message);
+    console.log('\nRun: npm run db:push --force');
+  } finally {
+    await client.end();
+  }
+}
+
+setupDatabase();
+EOF
+
+# Load environment and run
+source .env
+node check-db.js
+file:///root/EMSInsights/check-db.js:1
+const { Client } = require('pg');
+                   ^
+
+ReferenceError: require is not defined in ES module scope, you can use import instead
+This file is being treated as an ES module because it has a '.js' file extension and '/root/EMSInsights/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+    at file:///root/EMSInsights/check-db.js:1:20
+    at ModuleJob.run (node:internal/modules/esm/module_job:263:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:540:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v20.19.4

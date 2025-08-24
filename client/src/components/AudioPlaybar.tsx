@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import WaveSurfer from "wavesurfer.js";
 import { 
   Play, 
@@ -47,11 +48,15 @@ export function AudioPlaybar() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.7);
   const [isMuted, setIsMuted] = useState(false);
-  const [autoplay, setAutoplay] = useState(false);
+  const [autoplay, setAutoplay] = useState(true); // Default to true for auto-playing
   const [selectedTalkgroup, setSelectedTalkgroup] = useState<string>("all");
   const [currentAudio, setCurrentAudio] = useState<AudioFile | null>(null);
   const [audioQueue, setAudioQueue] = useState<AudioFile[]>([]);
+  const processedCallsRef = useRef<Set<string>>(new Set());
   const { toast } = useToast();
+  
+  // Connect to WebSocket for real-time call updates
+  const { calls: liveCalls } = useWebSocket('/ws');
 
   // Fetch available talkgroups
   const { data: talkgroups = [] } = useQuery<TalkGroup[]>({
@@ -59,12 +64,94 @@ export function AudioPlaybar() {
     refetchInterval: 30000,
   });
 
-  // Fetch live audio stream for selected talkgroup
-  const { data: liveAudio } = useQuery<AudioFile[]>({
-    queryKey: ['/api/audio/live', selectedTalkgroup],
-    refetchInterval: 2000,
-    enabled: selectedTalkgroup !== "all"
-  });
+  // Track processed call IDs to avoid duplicates
+  const processedCallsRef = useRef<Set<string>>(new Set());
+  const lastCheckTimeRef = useRef<number>(Date.now());
+  
+  // Process new and updated calls from WebSocket when autoplay is enabled
+  useEffect(() => {
+    if (!autoplay) return;
+    if (!liveCalls || liveCalls.length === 0) return;
+    
+    // Find calls that should be auto-played
+    const eligibleCalls = liveCalls.filter(call => {
+      // Create unique ID for tracking
+      const uniqueId = `${call.id}-${call.audioSegmentId || call.rdioCallId || 'no-audio'}`;
+      
+      // Skip if already processed
+      if (processedCallsRef.current.has(uniqueId)) return false;
+      
+      // Must have audio
+      const hasAudio = call.audioSegmentId || call.rdioCallId;
+      if (!hasAudio) return false;
+      
+      // Must have transcript (indicates processing is complete)
+      if (!call.transcript || call.transcript === '[No transcription available]') return false;
+      
+      // Check talkgroup match
+      const matchesTalkgroup = selectedTalkgroup === "all" || 
+        (call.talkgroup && call.talkgroup === selectedTalkgroup);
+      if (!matchesTalkgroup) return false;
+      
+      // Filter by call type - exclude hospital and unknown calls
+      const isValidCallType = call.callType && 
+        call.callType !== 'Hospital' && 
+        call.callType !== 'Unknown' &&
+        call.callType !== 'Non-Emergency Content';
+      if (!isValidCallType) return false;
+      
+      // Check if call is recent (within last 5 minutes)
+      const callTime = new Date(call.timestamp).getTime();
+      const isRecent = (Date.now() - callTime) < 5 * 60 * 1000;
+      if (!isRecent) return false;
+      
+      return true;
+    });
+    
+    if (eligibleCalls.length > 0) {
+      console.log(`[AudioPlaybar] Found ${eligibleCalls.length} eligible calls for auto-play`);
+      
+      // Sort by timestamp (newest first)
+      const sortedCalls = eligibleCalls.sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      
+      // Add to queue
+      const newAudioFiles: AudioFile[] = sortedCalls.map(call => {
+        const uniqueId = `${call.id}-${call.audioSegmentId || call.rdioCallId || 'no-audio'}`;
+        processedCallsRef.current.add(uniqueId);
+        
+        console.log(`[AudioPlaybar] Queuing call ${call.id}: ${call.callType} at ${call.location || 'unknown location'}`);
+        
+        return {
+          id: uniqueId,
+          audioSegmentId: call.audioSegmentId,
+          rdioCallId: call.rdioCallId,
+          timestamp: call.timestamp,
+          duration: 0,
+          talkgroup: call.talkgroup || '',
+        };
+      });
+      
+      setAudioQueue(prev => {
+        // Add new items and limit queue size to 20 items
+        const updated = [...prev, ...newAudioFiles].slice(0, 20);
+        console.log(`[AudioPlaybar] Queue updated: ${updated.length} items total`);
+        return updated;
+      });
+      
+      // Start playing if nothing is currently playing
+      if (!currentAudio && !isPlaying && newAudioFiles.length > 0) {
+        const firstItem = newAudioFiles[0];
+        console.log('[AudioPlaybar] Auto-starting playback of first item:', firstItem.id);
+        setCurrentAudio(firstItem);
+        setAudioQueue(prev => prev.slice(1));
+      }
+    }
+    
+    // Update last check time
+    lastCheckTimeRef.current = Date.now();
+  }, [liveCalls, autoplay, selectedTalkgroup, currentAudio, isPlaying]);
 
   // Initialize WaveSurfer
   useEffect(() => {
@@ -94,8 +181,13 @@ export function AudioPlaybar() {
       wavesurferRef.current.on('pause', () => setIsPlaying(false));
       wavesurferRef.current.on('finish', () => {
         setIsPlaying(false);
-        if (autoplay && audioQueue.length > 0) {
-          playNextInQueue();
+        // Auto-play next in queue if autoplay is enabled
+        if (audioQueue.length > 0 && autoplay) {
+          const nextAudio = audioQueue[0];
+          setCurrentAudio(nextAudio);
+          setAudioQueue(prev => prev.slice(1));
+        } else {
+          setCurrentAudio(null);
         }
       });
     }
@@ -116,13 +208,17 @@ export function AudioPlaybar() {
          currentAudio.rdioCallId ? `/api/audio/rdio/${currentAudio.rdioCallId}` : null);
       
       if (audioUrl) {
+        console.log('Loading audio:', audioUrl);
         wavesurferRef.current.load(audioUrl);
-        if (autoplay) {
-          wavesurferRef.current.play();
-        }
+        // Auto-play when loaded if autoplay is enabled
+        wavesurferRef.current.once('ready', () => {
+          if (autoplay) {
+            wavesurferRef.current?.play();
+          }
+        });
       }
     }
-  }, [currentAudio, autoplay]);
+  }, [currentAudio]);
 
   // Update volume
   useEffect(() => {
@@ -131,27 +227,27 @@ export function AudioPlaybar() {
     }
   }, [volume, isMuted]);
 
-  // Handle live audio updates
+  // Clean up old processed calls periodically
   useEffect(() => {
-    if (liveAudio && liveAudio.length > 0) {
-      const newAudio = liveAudio[0];
-      if (!currentAudio || currentAudio.id !== newAudio.id) {
-        if (autoplay) {
-          setCurrentAudio(newAudio);
-        } else {
-          setAudioQueue(prev => [...prev, newAudio].slice(-10)); // Keep last 10 items
-        }
+    const interval = setInterval(() => {
+      // Keep only the last 50 processed call IDs
+      if (processedCallsRef.current.size > 50) {
+        const callIds = Array.from(processedCallsRef.current);
+        processedCallsRef.current = new Set(callIds.slice(-50));
+        console.log('[AudioPlaybar] Cleaned up old processed calls, keeping last 50');
       }
+    }, 30000); // Clean up every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Log autoplay state changes
+  useEffect(() => {
+    console.log('[AudioPlaybar] Autoplay state changed:', autoplay);
+    if (autoplay) {
+      console.log('[AudioPlaybar] Autoplay enabled - will queue new dispatch calls automatically');
     }
-  }, [liveAudio, currentAudio, autoplay]);
-
-  const playNextInQueue = () => {
-    if (audioQueue.length > 0) {
-      const [next, ...rest] = audioQueue;
-      setCurrentAudio(next);
-      setAudioQueue(rest);
-    }
-  };
+  }, [autoplay]);
 
   const handlePlayPause = () => {
     if (wavesurferRef.current) {
@@ -164,7 +260,11 @@ export function AudioPlaybar() {
   };
 
   const handleSkipNext = () => {
-    playNextInQueue();
+    if (audioQueue.length > 0) {
+      const [next, ...rest] = audioQueue;
+      setCurrentAudio(next);
+      setAudioQueue(rest);
+    }
   };
 
   const handleVolumeChange = (value: number[]) => {
@@ -306,12 +406,15 @@ export function AudioPlaybar() {
             {/* Autoplay Toggle */}
             <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-gray-800/30">
               <Label htmlFor="autoplay" className="text-xs text-gray-400 cursor-pointer">
-                Autoplay
+                Autoplay New Calls
               </Label>
               <Switch
                 id="autoplay"
                 checked={autoplay}
-                onCheckedChange={setAutoplay}
+                onCheckedChange={(checked) => {
+                  setAutoplay(checked);
+                  console.log('[AudioPlaybar] Autoplay toggled:', checked);
+                }}
                 className="data-[state=checked]:bg-green-500"
               />
             </div>
@@ -344,6 +447,13 @@ export function AudioPlaybar() {
             {audioQueue.length > 0 && (
               <Badge variant="secondary" className="bg-orange-500/20 text-orange-400 border-orange-500/30">
                 Queue: {audioQueue.length}
+              </Badge>
+            )}
+            
+            {/* New Call Indicator */}
+            {autoplay && audioQueue.length === 0 && (
+              <Badge variant="default" className="bg-green-500/20 text-green-400 border-green-500/30 animate-pulse">
+                Auto-play Active
               </Badge>
             )}
 

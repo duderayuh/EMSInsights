@@ -1,0 +1,267 @@
+0|ems-insight  | > rest-express@1.0.0 start
+0|ems-insight  | > NODE_ENV=production node dist/index.js
+0|ems-insight  | [dotenv@17.0.1] injecting env (14) from .env – [tip] encrypt with dotenvx: https://dotenvx.com
+0|ems-insight  | OpenAI Whisper initialized as primary transcription method with local fallback
+0|ems-insight  | [dotenv@17.0.1] injecting env (0) from .env – [tip] encrypt with dotenvx: https://dotenvx.com
+0|ems-insight  | RdioScanner Environment Variables:
+0|ems-insight  | RDIO_SCANNER_URL: http://localhost:3001
+0|ems-insight  | RDIO_SCANNER_API_KEY: SET
+0|ems-insight  | RDIO_SCANNER_SYSTEMS: MESA
+0|ems-insight  | RDIO_SCANNER_TALKGROUPS: 10202,10244
+0|ems-insight  | Rdio File Monitor initialized:
+0|ems-insight  |   Watching: rdio-scanner-server/audio
+0|ems-insight  |   Processing to: /root/EMSInsights/ems_audio_processing
+0|ems-insight  | No previous processed ID found, starting fresh
+0|ems-insight  | Rdio Database Monitor initialized:
+0|ems-insight  |   Database: /root/EMSInsights/rdio-scanner-server/rdio-scanner.db
+0|ems-insight  |   Processing to: /root/EMSInsights/ems_audio_processing
+0|ems-insight  |   Target talkgroups: 10202, 10244, 10255, 10256, 10258
+0|ems-insight  | [dotenv@17.0.1] injecting env (0) from .env – [tip] encrypt with dotenvx: https://dotenvx.com
+0|ems-insight  | Google Address Validation API initialized successfully
+0|ems-insight  | Geocoding service initialized with OpenStreetMap Nominatim
+0|ems-insight  | [dotenv@17.0.1] injecting env (0) from .env – [tip] encrypt with dotenvx: https://dotenvx.com
+0|ems-insight  | Transcript cleanup service initialized with OpenAI API
+0|ems-insight  | [dotenv@17.0.1] injecting env (0) from .env – [tip] encrypt with dotenvx: https://dotenvx.com
+0|ems-insight  | WebSocket service initialized successfully
+0|ems-insight  | Starting Rdio Scanner server automatically...
+0|ems-insight  | Automatic restart enabled for Rdio Scanner server
+0|ems-insight  | Starting Rdio Scanner server...
+0|ems-insight  | Deployment environment detected - attempting to start Rdio Scanner locally
+0|ems-insight  | Health monitoring started - checking every 10 seconds
+0|ems-insight  | Rdio Scanner server started with PID 94358 on port 3001
+0|ems-insight  | Rdio Scanner server started automatically with PID 94358 on port 3001
+0|ems-insight  | Connected to Rdio Scanner database
+0|ems-insight  | Starting Rdio Scanner database monitoring...
+0|ems-insight  | Starting incident status monitor...
+0|ems-insight  | Incident status monitor started
+0|ems-insight  | 11:39:31 AM [express] serving on port 5000
+0|ems-insight  | Error updating system health: AggregateError [ECONNREFUSED]: 
+0|ems-insight  |     at internalConnectMultiple (node:net:1122:18)
+0|ems-insight  |     at afterConnectMultiple (node:net:1689:7) {
+0|ems-insight  |   code: 'ECONNREFUSED',
+0|ems-insight  |   [errors]: [
+0|ems-insight  |     Error: connect ECONNREFUSED ::1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '::1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     },
+0|ems-insight  |     Error: connect ECONNREFUSED 127.0.0.1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '127.0.0.1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     }
+0|ems-insight  |   ]
+0|ems-insight  | }
+0|ems-insight  | Error initializing default data: AggregateError [ECONNREFUSED]: 
+0|ems-insight  |     at internalConnectMultiple (node:net:1122:18)
+0|ems-insight  |     at afterConnectMultiple (node:net:1689:7) {
+0|ems-insight  |   code: 'ECONNREFUSED',
+0|ems-insight  |   [errors]: [
+0|ems-insight  |     Error: connect ECONNREFUSED ::1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '::1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     },
+0|ems-insight  |     Error: connect ECONNREFUSED 127.0.0.1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '127.0.0.1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     }
+0|ems-insight  |   ]
+0|ems-insight  | }
+0|ems-insight  | Error loading transcription dictionary: AggregateError [ECONNREFUSED]: 
+0|ems-insight  |     at internalConnectMultiple (node:net:1122:18)
+0|ems-insight  |     at afterConnectMultiple (node:net:1689:7) {
+0|ems-insight  |   code: 'ECONNREFUSED',
+0|ems-insight  |   [errors]: [
+0|ems-insight  |     Error: connect ECONNREFUSED ::1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '::1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     },
+0|ems-insight  |     Error: connect ECONNREFUSED 127.0.0.1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '127.0.0.1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     }
+0|ems-insight  |   ]
+0|ems-insight  | }
+0|ems-insight  | Error loading call types from database: AggregateError [ECONNREFUSED]: 
+0|ems-insight  |     at internalConnectMultiple (node:net:1122:18)
+0|ems-insight  |     at afterConnectMultiple (node:net:1689:7) {
+0|ems-insight  |   code: 'ECONNREFUSED',
+0|ems-insight  |   [errors]: [
+0|ems-insight  |     Error: connect ECONNREFUSED ::1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '::1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     },
+0|ems-insight  |     Error: connect ECONNREFUSED 127.0.0.1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '127.0.0.1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     }
+0|ems-insight  |   ]
+0|ems-insight  | }
+0|ems-insight  | Error updating system health: AggregateError [ECONNREFUSED]: 
+0|ems-insight  |     at internalConnectMultiple (node:net:1122:18)
+0|ems-insight  |     at afterConnectMultiple (node:net:1689:7) {
+0|ems-insight  |   code: 'ECONNREFUSED',
+0|ems-insight  |   [errors]: [
+0|ems-insight  |     Error: connect ECONNREFUSED ::1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '::1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     },
+0|ems-insight  |     Error: connect ECONNREFUSED 127.0.0.1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '127.0.0.1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     }
+0|ems-insight  |   ]
+0|ems-insight  | }
+0|ems-insight  | Error initializing default data: AggregateError [ECONNREFUSED]: 
+0|ems-insight  |     at internalConnectMultiple (node:net:1122:18)
+0|ems-insight  |     at afterConnectMultiple (node:net:1689:7) {
+0|ems-insight  |   code: 'ECONNREFUSED',
+0|ems-insight  |   [errors]: [
+0|ems-insight  |     Error: connect ECONNREFUSED ::1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '::1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     },
+0|ems-insight  |     Error: connect ECONNREFUSED 127.0.0.1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '127.0.0.1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     }
+0|ems-insight  |   ]
+0|ems-insight  | }
+0|ems-insight  | Error loading call types from database: AggregateError [ECONNREFUSED]: 
+0|ems-insight  |     at internalConnectMultiple (node:net:1122:18)
+0|ems-insight  |     at afterConnectMultiple (node:net:1689:7) {
+0|ems-insight  |   code: 'ECONNREFUSED',
+0|ems-insight  |   [errors]: [
+0|ems-insight  |     Error: connect ECONNREFUSED ::1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '::1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     },
+0|ems-insight  |     Error: connect ECONNREFUSED 127.0.0.1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '127.0.0.1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     }
+0|ems-insight  |   ]
+0|ems-insight  | }
+0|ems-insight  | Error updating system health: AggregateError [ECONNREFUSED]: 
+0|ems-insight  |     at internalConnectMultiple (node:net:1122:18)
+0|ems-insight  |     at afterConnectMultiple (node:net:1689:7) {
+0|ems-insight  |   code: 'ECONNREFUSED',
+0|ems-insight  |   [errors]: [
+0|ems-insight  |     Error: connect ECONNREFUSED ::1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '::1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     },
+0|ems-insight  |     Error: connect ECONNREFUSED 127.0.0.1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '127.0.0.1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     }
+0|ems-insight  |   ]
+0|ems-insight  | }
+0|ems-insight  | node:internal/process/promises:391
+0|ems-insight  |     triggerUncaughtException(err, true /* fromPromise */);
+0|ems-insight  |     ^
+0|ems-insight  | AggregateError [ECONNREFUSED]: 
+0|ems-insight  |     at internalConnectMultiple (node:net:1122:18)
+0|ems-insight  |     at afterConnectMultiple (node:net:1689:7) {
+0|ems-insight  |   code: 'ECONNREFUSED',
+0|ems-insight  |   [errors]: [
+0|ems-insight  |     Error: connect ECONNREFUSED ::1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '::1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     },
+0|ems-insight  |     Error: connect ECONNREFUSED 127.0.0.1:5432
+0|ems-insight  |         at createConnectionError (node:net:1652:14)
+0|ems-insight  |         at afterConnectMultiple (node:net:1682:16) {
+0|ems-insight  |       errno: -111,
+0|ems-insight  |       code: 'ECONNREFUSED',
+0|ems-insight  |       syscall: 'connect',
+0|ems-insight  |       address: '127.0.0.1',
+0|ems-insight  |       port: 5432
+0|ems-insight  |     }
+0|ems-insight  |   ]
+0|ems-insight  | }
+0|ems-insight  | Node.js v20.19.4
+^C

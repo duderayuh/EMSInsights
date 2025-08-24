@@ -18,6 +18,7 @@ import AlertManagementPage from "@/pages/alert-management";
 import PublicHealthAnalytics from "@/pages/PublicHealthAnalytics";
 import IncidentsPage from "@/pages/incidents";
 import IncidentsMobilePage from "@/pages/incidents-mobile";
+import MobileMapPage from "@/pages/mobile-map";
 import { useAuth } from "@/hooks/useAuth";
 
 // Protected route wrapper component
@@ -124,6 +125,9 @@ function Router() {
           const isMobile = window.innerWidth < 768;
           return <ProtectedRoute component={isMobile ? IncidentsMobilePage : IncidentsPage} />;
         }}
+      </Route>
+      <Route path="/mobile-map">
+        {() => <ProtectedRoute component={MobileMapPage} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

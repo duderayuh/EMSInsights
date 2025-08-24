@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Truck, Building2, BarChart3, Heart, Bell, Settings, Users, Menu } from "lucide-react";
+import { Home, Truck, Building2, BarChart3, Heart, Bell, Settings, Users, Menu, Map } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -35,6 +35,11 @@ export default function MobileBottomNav() {
       icon: Home,
     },
     {
+      href: "/mobile-map",
+      label: "Map",
+      icon: Map,
+    },
+    {
       href: "/incidents",
       label: "Units",
       icon: Truck,
@@ -53,7 +58,7 @@ export default function MobileBottomNav() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-background border-t">
-      <nav className="grid grid-cols-5 h-16">
+      <nav className="grid grid-cols-6 h-16">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = location === item.href;

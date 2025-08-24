@@ -11,6 +11,7 @@ interface AppleMapViewProps {
   calls: Call[];
   onCallSelect?: (call: Call) => void;
   newCallIds?: Set<number>;
+  hoveredCallId?: number | null;
 }
 
 declare global {
@@ -37,7 +38,7 @@ const HOSPITALS = [
   { name: "IU Health West Hospital", lat: 39.7482, lng: -86.3719, type: "General" }
 ];
 
-function AppleMapView({ calls, onCallSelect, newCallIds }: AppleMapViewProps) {
+function AppleMapView({ calls, onCallSelect, newCallIds, hoveredCallId }: AppleMapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersMapRef = useRef<Map<number, any>>(new Map());
@@ -360,16 +361,22 @@ function AppleMapView({ calls, onCallSelect, newCallIds }: AppleMapViewProps) {
 
       const emoji = getCallTypeEmoji(mostRecentCall.callType || 'Unknown');
       const isNewCall = newCallIds?.has(mostRecentCall.id) || false;
+      const isHovered = hoveredCallId === mostRecentCall.id;
       
       // Create custom annotation with emoji
       const annotation = new window.mapkit.Annotation(coordinate, (coordinate: any, options: any) => {
         const div = document.createElement('div');
-        div.className = isNewCall ? 'apple-map-marker pulse-marker' : 'apple-map-marker';
+        // Apply hover class if this marker is being hovered from sidebar
+        div.className = isHovered ? 'apple-map-marker hover-marker' : 
+                       isNewCall ? 'apple-map-marker pulse-marker' : 
+                       'apple-map-marker';
         div.style.fontSize = '24px';
         div.style.cursor = 'pointer';
-        div.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))';
-        div.style.transform = 'scale(1.2)';
+        div.style.filter = isHovered ? 'drop-shadow(0 0 20px rgba(59, 130, 246, 0.8))' : 
+                          'drop-shadow(0 2px 4px rgba(0,0,0,0.3))';
+        div.style.transform = isHovered ? 'scale(1.8)' : 'scale(1.2)';
         div.style.transition = 'transform 0.2s';
+        div.style.zIndex = isHovered ? '10000' : '1';
         div.textContent = emoji;
         
         div.onmouseenter = () => {
@@ -397,7 +404,7 @@ function AppleMapView({ calls, onCallSelect, newCallIds }: AppleMapViewProps) {
       markersMapRef.current.set(mostRecentCall.id, annotation);
     });
 
-  }, [getFilteredCalls, isLoaded, onCallSelect, newCallIds]);
+  }, [getFilteredCalls, isLoaded, onCallSelect, newCallIds, hoveredCallId]);
 
   // Handle hospital overlay
   useEffect(() => {

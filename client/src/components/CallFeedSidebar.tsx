@@ -16,6 +16,7 @@ interface CallFeedSidebarProps {
   onPriorityFilter: (priority: string) => void;
   isLoading: boolean;
   newCallIds: Set<number>;
+  onCallHover?: (callId: number | null) => void;
 }
 
 interface EnhancedCall extends Call {
@@ -29,7 +30,8 @@ export function CallFeedSidebar({
   onSearch, 
   onPriorityFilter, 
   isLoading,
-  newCallIds 
+  newCallIds,
+  onCallHover 
 }: CallFeedSidebarProps) {
   
   const getTalkgroupColor = (talkgroup: string) => {
@@ -132,6 +134,8 @@ export function CallFeedSidebar({
                     key={call.id}
                     className={`p-3 bg-gray-100 dark:bg-gray-700 rounded-lg border-l-4 hover:bg-gray-200 dark:hover:bg-gray-600 cursor-pointer transition-all overflow-hidden max-w-[354px] ${getTalkgroupBorderColor(call.talkgroup || '')} ${isNewCall ? 'animate-pulse bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-300 dark:ring-blue-600' : ''}`}
                     onClick={() => onCallSelect(call)}
+                    onMouseEnter={() => onCallHover?.(call.id)}
+                    onMouseLeave={() => onCallHover?.(null)}
                   >
                     <div className="flex items-center justify-between mb-2 gap-2">
                       <Badge className={`text-xs font-medium truncate max-w-[200px] ${getTalkgroupColor(call.talkgroup || '')}`}>

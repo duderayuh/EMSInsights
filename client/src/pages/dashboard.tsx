@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [priorityFilter, setPriorityFilter] = useState("10202");
   const [isMobile, setIsMobile] = useState(false);
   const [newCallIds, setNewCallIds] = useState<Set<number>>(new Set());
+  const [hoveredCallId, setHoveredCallId] = useState<number | null>(null);
   
   const { user, hasAdminAccess } = useAuth();
   const isAdmin = hasAdminAccess; // Use hasAdminAccess for admin features
@@ -264,6 +265,7 @@ export default function Dashboard() {
               onPriorityFilter={handlePriorityFilter}
               isLoading={searchQuery ? isSearching : isLoading}
               newCallIds={newCallIds}
+              onCallHover={setHoveredCallId}
             />
             
             <MainDashboard
@@ -271,6 +273,7 @@ export default function Dashboard() {
               stats={displayStats}
               onCallSelect={handleCallSelect}
               newCallIds={newCallIds}
+              hoveredCallId={hoveredCallId}
             />
           </div>
           <AudioPlaybar />

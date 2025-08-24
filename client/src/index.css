@@ -212,6 +212,23 @@ html {
   animation: pulse-marker 2s ease-in-out infinite;
 }
 
+/* Hover highlight animation for map markers */
+@keyframes hover-highlight {
+  0%, 100% {
+    transform: scale(1.8);
+    filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.8));
+  }
+  50% {
+    transform: scale(2.2);
+    filter: drop-shadow(0 0 30px rgba(59, 130, 246, 1));
+  }
+}
+
+.hover-marker {
+  animation: hover-highlight 1s ease-in-out infinite;
+  z-index: 10000 !important;
+}
+
 /* Enhanced tab navigation styles */
 [role="tablist"] button {
   position: relative;

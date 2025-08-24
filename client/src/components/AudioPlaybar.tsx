@@ -3,6 +3,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import WaveSurfer from "wavesurfer.js";
@@ -14,9 +17,8 @@ import {
   Download, 
   Link2, 
   SkipForward,
-  ToggleLeft,
-  ToggleRight,
-  Radio
+  Radio,
+  Loader2
 } from "lucide-react";
 
 interface TalkGroup {
@@ -69,12 +71,13 @@ export function AudioPlaybar() {
     if (waveformRef.current && !wavesurferRef.current) {
       wavesurferRef.current = WaveSurfer.create({
         container: waveformRef.current,
-        waveColor: '#4CAF50',
-        progressColor: '#2196F3',
-        cursorColor: '#fff',
-        barWidth: 2,
-        barRadius: 3,
-        height: 48,
+        waveColor: 'rgba(96, 165, 250, 0.5)', // Light blue with opacity
+        progressColor: 'rgba(59, 130, 246, 0.9)', // Brighter blue for progress
+        cursorColor: 'rgba(255, 255, 255, 0.7)',
+        barWidth: 3,
+        barRadius: 4,
+        barGap: 2,
+        height: 40,
         normalize: true,
         backend: 'MediaElement',
       });
@@ -204,118 +207,155 @@ export function AudioPlaybar() {
   const monitoredTalkgroups = talkgroups.filter(tg => tg.isMonitored);
 
   return (
-    <Card className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-background/95 backdrop-blur border-t">
-      <div className="flex items-center gap-4">
-        {/* Talkgroup Selector */}
-        <div className="flex items-center gap-2">
-          <Radio className="h-4 w-4 text-muted-foreground" />
-          <Select value={selectedTalkgroup} onValueChange={setSelectedTalkgroup}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Select Talkgroup" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Talkgroups</SelectItem>
-              {monitoredTalkgroups.map(tg => (
-                <SelectItem key={tg.talkgroupId} value={tg.talkgroupId}>
-                  {tg.displayName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+    <Card className="fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl border-t border-gray-700 shadow-2xl">
+      <div className="px-3 sm:px-6 py-2 sm:py-3">
+        <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+          {/* Mobile Layout - First Row */}
+          <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 sm:gap-4">
+            {/* Talkgroup Selector */}
+            <div className="flex items-center gap-2 sm:gap-3 flex-1 sm:flex-initial sm:min-w-[240px]">
+              <div className="p-1.5 sm:p-2 rounded-lg bg-blue-500/10 backdrop-blur">
+                <Radio className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-blue-400" />
+              </div>
+              <Select value={selectedTalkgroup} onValueChange={setSelectedTalkgroup}>
+                <SelectTrigger className="w-[140px] sm:w-[180px] bg-gray-800/50 border-gray-700 hover:bg-gray-700/50 transition-colors text-xs sm:text-sm">
+                  <SelectValue placeholder="Select Talkgroup" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectItem value="all">All Talkgroups</SelectItem>
+                  {monitoredTalkgroups.map(tg => (
+                    <SelectItem key={tg.talkgroupId} value={tg.talkgroupId}>
+                      {tg.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        {/* Play/Pause Button */}
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={handlePlayPause}
-          disabled={!currentAudio}
-        >
-          {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-        </Button>
+            {/* Playback Controls */}
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant={isPlaying ? "default" : "secondary"}
+                onClick={handlePlayPause}
+                disabled={!currentAudio}
+                className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transition-all"
+              >
+                {isPlaying ? 
+                  <Pause className="h-4 sm:h-5 w-4 sm:w-5 text-white" /> : 
+                  <Play className="h-4 sm:h-5 w-4 sm:w-5 text-white ml-0.5" />
+                }
+              </Button>
 
-        {/* Skip Next */}
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={handleSkipNext}
-          disabled={audioQueue.length === 0}
-        >
-          <SkipForward className="h-4 w-4" />
-        </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleSkipNext}
+                disabled={audioQueue.length === 0}
+                className="h-7 w-7 sm:h-9 sm:w-9 rounded-full hover:bg-gray-700/50 disabled:opacity-30"
+              >
+                <SkipForward className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
+              </Button>
+            </div>
 
-        {/* Waveform */}
-        <div className="flex-1 flex items-center gap-2">
-          <span className="text-xs text-muted-foreground w-12">
-            {formatTime(currentTime)}
-          </span>
-          <div ref={waveformRef} className="flex-1 h-12" />
-          <span className="text-xs text-muted-foreground w-12">
-            {formatTime(duration)}
-          </span>
-        </div>
-
-        {/* Volume Control */}
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setIsMuted(!isMuted)}
-          >
-            {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-          </Button>
-          <Slider
-            value={[volume]}
-            onValueChange={handleVolumeChange}
-            max={1}
-            step={0.1}
-            className="w-24"
-          />
-        </div>
-
-        {/* Autoplay Toggle */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Autoplay</span>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setAutoplay(!autoplay)}
-          >
-            {autoplay ? 
-              <ToggleRight className="h-4 w-4 text-green-500" /> : 
-              <ToggleLeft className="h-4 w-4 text-muted-foreground" />
-            }
-          </Button>
-        </div>
-
-        {/* Download and Link Buttons */}
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleDownload}
-            disabled={!currentAudio}
-            title="Download Audio"
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleCopyLink}
-            disabled={!currentAudio}
-            title="Copy Link"
-          >
-            <Link2 className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Queue Indicator */}
-        {audioQueue.length > 0 && (
-          <div className="text-xs text-muted-foreground">
-            Queue: {audioQueue.length}
+            {/* Mobile Only - Queue Badge */}
+            <div className="sm:hidden">
+              {audioQueue.length > 0 && (
+                <Badge variant="secondary" className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">
+                  {audioQueue.length}
+                </Badge>
+              )}
+            </div>
           </div>
-        )}
+
+          {/* Waveform - Full Width on Mobile */}
+          <div className="w-full sm:flex-1 flex items-center gap-2 sm:gap-3 bg-gray-800/30 rounded-lg px-2 sm:px-3 py-1">
+            <span className="text-[10px] sm:text-xs font-mono text-blue-400 w-10 sm:w-12 text-right">
+              {formatTime(currentTime)}
+            </span>
+            <div ref={waveformRef} className="flex-1 h-10 sm:h-12 rounded" />
+            <span className="text-[10px] sm:text-xs font-mono text-gray-400 w-10 sm:w-12">
+              {formatTime(duration)}
+            </span>
+          </div>
+
+          {/* Desktop Only - Additional Controls */}
+          <div className="hidden sm:flex items-center gap-4">
+            {/* Volume Control */}
+            <div className="flex items-center gap-2">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setIsMuted(!isMuted)}
+                className="h-8 w-8 rounded-full hover:bg-gray-700/50"
+              >
+                {isMuted ? 
+                  <VolumeX className="h-4 w-4 text-gray-400" /> : 
+                  <Volume2 className="h-4 w-4 text-gray-300" />
+                }
+              </Button>
+              <Slider
+                value={[volume]}
+                onValueChange={handleVolumeChange}
+                max={1}
+                step={0.05}
+                className="w-20"
+              />
+            </div>
+
+            {/* Autoplay Toggle */}
+            <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-gray-800/30">
+              <Label htmlFor="autoplay" className="text-xs text-gray-400 cursor-pointer">
+                Autoplay
+              </Label>
+              <Switch
+                id="autoplay"
+                checked={autoplay}
+                onCheckedChange={setAutoplay}
+                className="data-[state=checked]:bg-green-500"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleDownload}
+                disabled={!currentAudio}
+                className="h-8 w-8 rounded-full hover:bg-gray-700/50 disabled:opacity-30"
+                title="Download Audio"
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleCopyLink}
+                disabled={!currentAudio}
+                className="h-8 w-8 rounded-full hover:bg-gray-700/50 disabled:opacity-30"
+                title="Copy Link"
+              >
+                <Link2 className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Queue Indicator */}
+            {audioQueue.length > 0 && (
+              <Badge variant="secondary" className="bg-orange-500/20 text-orange-400 border-orange-500/30">
+                Queue: {audioQueue.length}
+              </Badge>
+            )}
+
+            {/* Loading Indicator */}
+            {!currentAudio && selectedTalkgroup !== "all" && (
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Waiting...</span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </Card>
   );

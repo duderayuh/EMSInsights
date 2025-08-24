@@ -9,6 +9,7 @@ import IncidentsPage from "@/pages/incidents";
 import { MobileDashboard } from "@/components/MobileDashboard";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import MobileHeader from "@/components/MobileHeader";
+import { AudioPlaybar } from "@/components/AudioPlaybar";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
@@ -199,7 +200,7 @@ export default function Dashboard() {
         </div>
         
         <TabsContent value="dashboard" className="m-0 h-[calc(100vh-120px)]">
-          <div className="flex h-full overflow-hidden">
+          <div className="flex h-full overflow-hidden pb-16">
             <CallFeedSidebar
               calls={filteredCalls}
               onCallSelect={handleCallSelect}
@@ -214,6 +215,7 @@ export default function Dashboard() {
               onCallSelect={handleCallSelect}
             />
           </div>
+          <AudioPlaybar />
         </TabsContent>
         
         <TabsContent value="hospital" className="m-0 h-[calc(100vh-120px)]">

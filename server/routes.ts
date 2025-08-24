@@ -4039,6 +4039,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Audio Playbar API Routes - Get live audio for specific talkgroup
+  app.get("/api/audio/live/:talkgroupId", async (req, res) => {
+    try {
+      const { talkgroupId } = req.params;
+      
+      // Get recent calls for this talkgroup (last 10)
+      const calls = await storage.getCalls();
+      const filteredCalls = calls
+        .filter(call => call.talkgroup === talkgroupId)
+        .slice(0, 10);
+      
+      // Format the audio files for playback
+      const audioFiles = filteredCalls.map(call => ({
+        id: call.id.toString(),
+        audioSegmentId: call.audioSegmentId,
+        rdioCallId: (call.metadata as any)?.rdioCallId,
+        timestamp: call.timestamp.toISOString(),
+        duration: call.duration || 0,
+        talkgroup: call.talkgroup,
+      }));
+      
+      res.json(audioFiles);
+    } catch (error) {
+      console.error('Error fetching live audio:', error);
+      res.status(500).json({ error: "Failed to fetch live audio" });
+    }
+  });
+
+  // Get audio file by rdio call ID
+  app.get("/api/audio/rdio/:rdioCallId", async (req, res) => {
+    try {
+      const rdioCallId = parseInt(req.params.rdioCallId);
+      
+      // Access the Rdio Scanner database directly to get audio
+      const Database = await import('better-sqlite3');
+      const path = await import('path');
+      const fs = await import('fs');
+      
+      const rdioDbPath = path.join(process.cwd(), 'rdio-scanner-server/rdio-scanner.db');
+      
+      if (!fs.existsSync(rdioDbPath)) {
+        return res.status(503).json({ 
+          error: "Audio database not available",
+          details: "Rdio Scanner database file not found"
+        });
+      }
+      
+      const db = new Database.default(rdioDbPath, { readonly: true });
+      
+      try {
+        const stmt = db.prepare('SELECT audio, audioType FROM rdioScannerCalls WHERE id = ?');
+        const result = stmt.get(rdioCallId) as { audio: Buffer; audioType: string } | undefined;
+        
+        if (!result || !result.audio) {
+          db.close();
+          return res.status(404).json({ 
+            error: "Audio not found in Rdio Scanner database"
+          });
+        }
+        
+        const audioBuffer = result.audio;
+        const audioType = result.audioType || 'm4a';
+        const mimeType = audioType === 'mp3' ? 'audio/mpeg' : 'audio/mp4';
+        
+        db.close();
+        
+        // Handle range requests for audio streaming
+        const range = req.headers.range;
+        if (range) {
+          const parts = range.replace(/bytes=/, "").split("-");
+          const start = parseInt(parts[0], 10);
+          const end = parts[1] ? parseInt(parts[1], 10) : audioBuffer.length - 1;
+          const chunksize = (end - start) + 1;
+          
+          const head = {
+            'Content-Range': `bytes ${start}-${end}/${audioBuffer.length}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunksize,
+            'Content-Type': mimeType,
+          };
+          
+          res.writeHead(206, head);
+          res.end(audioBuffer.slice(start, end + 1));
+        } else {
+          res.writeHead(200, {
+            'Content-Length': audioBuffer.length,
+            'Content-Type': mimeType,
+            'Accept-Ranges': 'bytes',
+          });
+          res.end(audioBuffer);
+        }
+      } catch (dbError) {
+        if (db) db.close();
+        console.error('Error querying Rdio Scanner database:', dbError);
+        return res.status(500).json({ error: "Failed to query Rdio Scanner database" });
+      }
+    } catch (error) {
+      console.error('Error serving rdio audio:', error);
+      res.status(500).json({ error: "Failed to serve rdio audio" });
+    }
+  });
+
   // Call Types API Routes
   app.get('/api/call-types', async (req, res) => {
     try {

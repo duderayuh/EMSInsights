@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Truck, Building2, BarChart3, Heart, Bell, Settings, Users } from "lucide-react";
+import { Home, Truck, Building2, BarChart3, Heart, Bell, Settings, Users, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";

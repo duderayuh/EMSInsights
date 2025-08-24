@@ -407,7 +407,7 @@ export function AudioPlaybar() {
   const monitoredTalkgroups = talkgroups.filter(tg => tg.isMonitored);
 
   return (
-    <Card className="fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl border-t border-gray-700 shadow-2xl">
+    <Card className="absolute bottom-0 left-0 right-0 z-50 bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl border-t border-gray-700 shadow-2xl h-20">
       <div className="px-3 sm:px-6 py-2 sm:py-3">
         <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
           {/* Mobile Layout - First Row */}

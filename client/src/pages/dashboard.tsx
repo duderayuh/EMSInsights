@@ -194,14 +194,14 @@ export default function Dashboard() {
 
   // Desktop Layout (existing)
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-foreground">
+    <div className="h-screen bg-gray-100 dark:bg-gray-900 text-foreground overflow-hidden flex flex-col">
       <AppHeader 
         stats={displayStats}
         connectionStatus={connectionStatus}
         systemHealth={systemHealth}
       />
       
-      <Tabs defaultValue="dashboard" className="flex-1" onValueChange={(value) => {
+      <Tabs defaultValue="dashboard" className="flex-1 flex flex-col overflow-hidden" onValueChange={(value) => {
         // When switching to dashboard tab, refresh map after a short delay
         if (value === "dashboard") {
           setTimeout(() => {
@@ -257,8 +257,8 @@ export default function Dashboard() {
           </div>
         </div>
         
-        <TabsContent value="dashboard" className="m-0 h-[calc(100vh-120px)]">
-          <div className="flex h-full overflow-hidden">
+        <TabsContent value="dashboard" className="m-0 flex-1 flex flex-col overflow-hidden relative">
+          <div className="flex flex-1 overflow-hidden">
             <CallFeedSidebar
               calls={filteredCalls}
               onCallSelect={handleCallSelect}
@@ -280,19 +280,19 @@ export default function Dashboard() {
           <AudioPlaybar />
         </TabsContent>
         
-        <TabsContent value="hospital" className="m-0 h-[calc(100vh-200px)]"> {/* Added padding for AudioPlaybar */}
+        <TabsContent value="hospital" className="m-0 flex-1 pb-20 overflow-hidden">
           <HospitalCallsTab />
         </TabsContent>
         
-        <TabsContent value="analytics" className="m-0 h-[calc(100vh-200px)] overflow-y-auto"> {/* Added padding for AudioPlaybar */}
+        <TabsContent value="analytics" className="m-0 flex-1 pb-20 overflow-y-auto">
           <HospitalAnalyticsDashboard />
         </TabsContent>
         
-        <TabsContent value="public-health" className="m-0 h-[calc(100vh-200px)] overflow-y-auto"> {/* Added padding for AudioPlaybar */}
+        <TabsContent value="public-health" className="m-0 flex-1 pb-20 overflow-y-auto">
           <PublicHealthAnalytics />
         </TabsContent>
         
-        <TabsContent value="incidents" className="m-0 h-[calc(100vh-200px)] overflow-y-auto"> {/* Added padding for AudioPlaybar */}
+        <TabsContent value="incidents" className="m-0 flex-1 pb-20 overflow-y-auto">
           <IncidentsPage />
         </TabsContent>
       </Tabs>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
+import MobileLayout from "@/components/MobileLayout";
 
 interface AlertRule {
   id: number;
@@ -64,6 +65,16 @@ interface UserAlertPreferences {
 
 export default function AlertManagementPage() {
   const [selectedTab, setSelectedTab] = useState("rules");
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showPreferencesDialog, setShowPreferencesDialog] = useState(false);
@@ -318,8 +329,8 @@ export default function AlertManagementPage() {
     return <Badge variant={variants[type] || "default"}>{type}</Badge>;
   };
 
-  return (
-    <div className="container mx-auto px-4 py-6 max-w-7xl">
+  const content = (
+    <div className={isMobile ? "px-4 py-4" : "container mx-auto px-4 py-6 max-w-7xl"}>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Alert Management</h1>
@@ -818,4 +829,14 @@ export default function AlertManagementPage() {
       </Dialog>
     </div>
   );
+  
+  if (isMobile) {
+    return (
+      <MobileLayout title="Alerts">
+        {content}
+      </MobileLayout>
+    );
+  }
+  
+  return content;
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { Call } from '@shared/schema';
+import MobileLayout from '@/components/MobileLayout';
 import { findClosestHospital, formatDistance } from '@/lib/hospital-proximity';
 
 const talkgroupMapping = {
@@ -1010,6 +1011,16 @@ function AudioProcessingAdmin() {
 
 export default function AdminPage() {
   const [editingCall, setEditingCall] = useState<Call | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   const [editForm, setEditForm] = useState({
     transcript: '',
     callType: '',
@@ -1268,18 +1279,12 @@ export default function AdminPage() {
     
     // Add new units
     if (unitsToAdd.length > 0) {
-      await apiRequest(`/api/calls/${editingCall.id}/units`, {
-        method: 'POST',
-        body: JSON.stringify({ unitIds: unitsToAdd })
-      });
+      await apiRequest(`/api/calls/${editingCall.id}/units`, JSON.stringify({ unitIds: unitsToAdd }));
     }
     
     // Remove units
     if (unitsToRemove.length > 0) {
-      await apiRequest(`/api/calls/${editingCall.id}/units`, {
-        method: 'DELETE',
-        body: JSON.stringify({ unitIds: unitsToRemove })
-      });
+      await apiRequest(`/api/calls/${editingCall.id}/units`, JSON.stringify({ unitIds: unitsToRemove }));
     }
     
     queryClient.invalidateQueries({ queryKey: ['/api/calls/active'] });
@@ -1399,8 +1404,8 @@ export default function AdminPage() {
     return talkgroupMapping[talkgroup as keyof typeof talkgroupMapping] || talkgroup;
   };
 
-  return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+  const content = (
+    <div className={isMobile ? "p-4" : "p-4 sm:p-6 max-w-7xl mx-auto"}>
       <div className="mb-4 sm:mb-6">
         <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
           <div>
@@ -2068,4 +2073,14 @@ export default function AdminPage() {
       </Tabs>
     </div>
   );
+  
+  if (isMobile) {
+    return (
+      <MobileLayout title="Admin">
+        {content}
+      </MobileLayout>
+    );
+  }
+  
+  return content;
 }

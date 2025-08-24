@@ -18,27 +18,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 
-// Google Maps type declarations
+// Apple MapKit type declarations
 declare global {
   interface Window {
-    google: any;
-  }
-}
-
-declare namespace google {
-  namespace maps {
-    class Map {
-      constructor(mapDiv: HTMLElement, opts?: any);
-    }
-    class Marker {
-      constructor(opts?: any);
-    }
-    class Size {
-      constructor(width: number, height: number);
-    }
-    class Point {
-      constructor(x: number, y: number);
-    }
+    mapkit: any;
   }
 }
 
@@ -47,63 +30,64 @@ interface CallDetailModalProps {
   onClose: () => void;
 }
 
-// Google Maps Mini Map Component
+// Apple Maps Mini Map Component
 function MiniMap({ latitude, longitude, location }: { latitude: number | null, longitude: number | null, location: string | null }) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const annotationRef = useRef<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Initialize Google Maps
+  // Initialize Apple MapKit
   useEffect(() => {
-    if (window.google && window.google.maps) {
+    // Check if mapkit is already initialized
+    if (window.mapkit && window.mapkit.maps) {
       setIsLoaded(true);
       return;
     }
 
-    // Fetch API key from backend and load Google Maps
-    const loadGoogleMaps = async () => {
+    // Load MapKit JS
+    const loadAppleMaps = async () => {
       try {
-        const response = await fetch('/api/config/google-maps-key');
-        const data = await response.json();
-        
-        if (!response.ok || !data.apiKey) {
-          console.error('Failed to fetch Google Maps API key:', data.error);
-          return;
-        }
-
-        // Set up global callback for this specific mini-map
-        const callbackName = `initGoogleMiniMap_${Date.now()}`;
-        (window as any)[callbackName] = () => {
-          setIsLoaded(true);
-        };
-
-        // Load Google Maps script if not already loaded
-        if (!document.querySelector('script[src*="maps.googleapis.com"]')) {
+        // Check if MapKit script is already being loaded or loaded
+        if (!document.querySelector('script[src*="mapkit.js"]')) {
           const script = document.createElement('script');
-          script.src = `https://maps.googleapis.com/maps/api/js?key=${data.apiKey}&callback=${callbackName}`;
-          script.async = true;
-          script.defer = true;
-          script.onerror = () => {
-            console.error('Failed to load Google Maps script');
+          script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.core.js';
+          script.crossOrigin = 'anonymous';
+          script.dataset.libraries = 'map,annotations';
+          script.dataset.callback = 'initMapKitMini';
+          
+          // Create global callback
+          (window as any).initMapKitMini = async () => {
+            try {
+              // Get Apple Maps keys from environment
+              const authorizationCallback = (done: any) => {
+                // Use environment variables for Apple MapKit
+                const jwt = import.meta.env.VITE_APPLE_MAPKIT_JS_KEY || '';
+                done(jwt);
+              };
+              
+              window.mapkit.init({
+                authorizationCallback,
+                language: 'en'
+              });
+              
+              setIsLoaded(true);
+            } catch (error) {
+              console.error('Error initializing MapKit:', error);
+            }
           };
+          
           document.head.appendChild(script);
-        } else {
-          // Google Maps is already loaded
+        } else if (window.mapkit) {
+          // MapKit script is loaded but maybe not initialized
           setIsLoaded(true);
         }
-
-        return () => {
-          if ((window as any)[callbackName]) {
-            delete (window as any)[callbackName];
-          }
-        };
       } catch (error) {
-        console.error('Error loading Google Maps:', error);
+        console.error('Error loading Apple Maps:', error);
       }
     };
 
-    loadGoogleMaps();
+    loadAppleMaps();
   }, []);
 
   // Create mini-map instance
@@ -111,40 +95,39 @@ function MiniMap({ latitude, longitude, location }: { latitude: number | null, l
     if (!isLoaded || !mapRef.current || !latitude || !longitude || mapInstanceRef.current) return;
 
     try {
-      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
-        center: { lat: latitude, lng: longitude },
-        zoom: 16,
-        disableDefaultUI: true, // Disable all UI controls for mini-map
-        gestureHandling: 'none', // Disable all user interactions
-        styles: [
-          {
-            featureType: "poi",
-            elementType: "labels",
-            stylers: [{ visibility: "off" }]
-          }
-        ]
+      const center = new window.mapkit.Coordinate(latitude, longitude);
+      
+      // Create map with minimal controls for mini-map
+      mapInstanceRef.current = new window.mapkit.Map(mapRef.current, {
+        center: center,
+        region: new window.mapkit.CoordinateRegion(
+          center,
+          new window.mapkit.CoordinateSpan(0.005, 0.005) // Roughly zoom level 16
+        ),
+        showsCompass: window.mapkit.FeatureVisibility.Hidden,
+        showsMapTypeControl: false,
+        showsZoomControl: false,
+        showsScale: window.mapkit.FeatureVisibility.Hidden,
+        isRotationEnabled: false,
+        isScrollEnabled: false,
+        isZoomEnabled: false,
+        colorScheme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 
+          window.mapkit.Map.ColorSchemes.Dark : 
+          window.mapkit.Map.ColorSchemes.Light
       });
 
-      // Add marker
-      markerRef.current = new window.google.maps.Marker({
-        position: { lat: latitude, lng: longitude },
-        map: mapInstanceRef.current,
+      // Create custom annotation for the location
+      annotationRef.current = new window.mapkit.MarkerAnnotation(center, {
         title: location || 'Emergency Location',
-        icon: {
-          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-            <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="16" cy="16" r="12" fill="#ef4444" stroke="#ffffff" stroke-width="3"/>
-              <circle cx="16" cy="16" r="4" fill="#ffffff"/>
-            </svg>
-          `),
-          scaledSize: new window.google.maps.Size(32, 32),
-          anchor: new window.google.maps.Point(16, 16)
-        }
+        color: '#ef4444',
+        glyphText: '🚨'
       });
-
-      console.log('Google Mini-Map created successfully');
+      
+      mapInstanceRef.current.addAnnotation(annotationRef.current);
+      
+      console.log('Apple Mini-Map created successfully');
     } catch (error) {
-      console.error('Error creating Google mini-map:', error);
+      console.error('Error creating Apple mini-map:', error);
     }
   }, [isLoaded, latitude, longitude, location]);
 
@@ -189,7 +172,7 @@ export function CallDetailModal({ call: initialCall, onClose }: CallDetailModalP
   const queryClient = useQueryClient();
   
   // Fetch the full call details including units
-  const { data: call = initialCall, isLoading: isLoadingCall } = useQuery({
+  const { data: call = initialCall, isLoading: isLoadingCall } = useQuery<Call & { units?: any[] }>({
     queryKey: [`/api/calls/${initialCall.id}`],
     enabled: !!initialCall.id
   });
@@ -209,7 +192,7 @@ export function CallDetailModal({ call: initialCall, onClose }: CallDetailModalP
   );
   
   // Fetch available unit tags
-  const { data: availableUnits = [] } = useQuery({
+  const { data: availableUnits = [] } = useQuery<any[]>({
     queryKey: ['/api/unit-tags'],
     enabled: isEditing
   });
@@ -681,16 +664,16 @@ export function CallDetailModal({ call: initialCall, onClose }: CallDetailModalP
                         <SelectItem value="Investigation">Investigation</SelectItem>
                         <SelectItem value="Mass Casualty">Mass Casualty</SelectItem>
                         <SelectItem value="Medical Emergency">Medical Emergency</SelectItem>
-                        <SelectItem value="Mental/Emotional">Mental/Emotional</SelectItem>
-                        <SelectItem value="Mental/Emotional B">Mental/Emotional B</SelectItem>
                         <SelectItem value="Mental-Emotional">Mental-Emotional</SelectItem>
                         <SelectItem value="Mental-Emotional B">Mental-Emotional B</SelectItem>
+                        <SelectItem value="Mental/Emotional">Mental/Emotional</SelectItem>
+                        <SelectItem value="Mental/Emotional B">Mental/Emotional B</SelectItem>
                         <SelectItem value="OB/Childbirth">OB/Childbirth</SelectItem>
                         <SelectItem value="OB/Childbirth B">OB/Childbirth B</SelectItem>
                         <SelectItem value="Overdose">Overdose</SelectItem>
+                        <SelectItem value="Overdose / Poisoning (Ingestion)">Overdose / Poisoning (Ingestion)</SelectItem>
                         <SelectItem value="Overdose B">Overdose B</SelectItem>
                         <SelectItem value="Overdose C">Overdose C</SelectItem>
-                        <SelectItem value="Overdose / Poisoning (Ingestion)">Overdose / Poisoning (Ingestion)</SelectItem>
                         <SelectItem value="Pediatric Cardiac Arrest">Pediatric Cardiac Arrest</SelectItem>
                         <SelectItem value="Residential Fire">Residential Fire</SelectItem>
                         <SelectItem value="Seizure">Seizure</SelectItem>

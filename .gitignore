@@ -4,3 +4,11 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Rdio Scanner database (too large for git, contains local audio data)
+rdio-scanner-server/rdio-scanner.db
+rdio-scanner-server/*.db
+
+# Audio processing directories
+ems_audio_processing/
+rdio-scanner-server/audio/

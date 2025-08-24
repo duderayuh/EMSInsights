@@ -228,14 +228,23 @@ export class TranscriptionService extends EventEmitter {
       console.error(`Failed to mark audio segment ${segmentId} as processed:`, error);
     }
     
-    // Clean up the audio file after successful transcription
+    // IMPORTANT: Only delete temporary copies in ems_audio_processing directory
+    // Never delete files from the rdio-scanner database directory
     try {
-      if (existsSync(filepath)) {
+      // Safety check: Only delete files from our temporary processing directory
+      if (filepath.includes('ems_audio_processing') && existsSync(filepath)) {
         unlinkSync(filepath);
-        console.log(`Audio file deleted after transcription: ${filepath}`);
+        console.log(`Temporary audio file deleted after transcription: ${filepath}`);
+      } else if (filepath.includes('rdio-scanner')) {
+        // CRITICAL: Never delete files from rdio-scanner database
+        console.log(`Preserving rdio-scanner database file (read-only): ${filepath}`);
+      } else if (existsSync(filepath)) {
+        // For any other temporary files created during processing
+        unlinkSync(filepath);
+        console.log(`Temporary audio file deleted after transcription: ${filepath}`);
       }
     } catch (error) {
-      console.error(`Failed to delete audio file ${filepath}:`, error);
+      console.error(`Failed to delete temporary audio file ${filepath}:`, error);
     }
   }
 

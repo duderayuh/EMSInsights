@@ -591,7 +591,7 @@ function AppleMapView({ calls, onCallSelect }: AppleMapViewProps) {
             variant={dispatchOverlayEnabled ? "default" : "outline"}
             size="sm"
             onClick={() => setDispatchOverlayEnabled(!dispatchOverlayEnabled)}
-            className="bg-background/95 backdrop-blur"
+            className="bg-background/95 backdrop-blur w-36"
           >
             <MapPin className="h-4 w-4 mr-1" />
             Dispatch Calls
@@ -643,7 +643,7 @@ function AppleMapView({ calls, onCallSelect }: AppleMapViewProps) {
           variant={hospitalOverlayEnabled ? "default" : "outline"}
           size="sm"
           onClick={() => setHospitalOverlayEnabled(!hospitalOverlayEnabled)}
-          className="bg-background/95 backdrop-blur"
+          className="bg-background/95 backdrop-blur w-36"
         >
           <Building className="h-4 w-4 mr-1" />
           Hospitals
@@ -660,7 +660,7 @@ function AppleMapView({ calls, onCallSelect }: AppleMapViewProps) {
             setClusterOverlayEnabled(!clusterOverlayEnabled);
             setShowClusterPanel(!showClusterPanel);
           }}
-          className="bg-background/95 backdrop-blur"
+          className="bg-background/95 backdrop-blur w-36"
         >
           <Filter className="h-4 w-4 mr-1" />
           Cluster Analysis
@@ -671,7 +671,7 @@ function AppleMapView({ calls, onCallSelect }: AppleMapViewProps) {
           variant={aircraftOverlayEnabled ? "default" : "outline"}
           size="sm"
           onClick={() => setAircraftOverlayEnabled(!aircraftOverlayEnabled)}
-          className="bg-background/95 backdrop-blur"
+          className="bg-background/95 backdrop-blur w-36"
         >
           <Plane className="h-4 w-4 mr-1" />
           Aircraft
@@ -687,7 +687,7 @@ function AppleMapView({ calls, onCallSelect }: AppleMapViewProps) {
           variant={weatherOverlayEnabled ? "default" : "outline"}
           size="sm"
           onClick={() => setWeatherOverlayEnabled(!weatherOverlayEnabled)}
-          className="bg-background/95 backdrop-blur"
+          className="bg-background/95 backdrop-blur w-36"
         >
           <Cloud className="h-4 w-4 mr-1" />
           Weather

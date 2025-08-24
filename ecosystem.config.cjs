@@ -9,7 +9,8 @@ module.exports = {
     max_memory_restart: '1G',
     env: {
       NODE_ENV: 'production',
-      PORT: 5000
+      PORT: 5000,
+      DATABASE_URL: 'postgresql://neondb_owner:YOUR_PASSWORD_HERE@ep-nameless-bonus-aegajrzu-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
     },
     error_file: './logs/err.log',
     out_file: './logs/out.log',

@@ -180,14 +180,6 @@ export function AudioPlaybar() {
       wavesurferRef.current.on('pause', () => setIsPlaying(false));
       wavesurferRef.current.on('finish', () => {
         setIsPlaying(false);
-        // Auto-play next in queue if autoplay is enabled
-        if (audioQueue.length > 0 && autoplay) {
-          const nextAudio = audioQueue[0];
-          setCurrentAudio(nextAudio);
-          setAudioQueue(prev => prev.slice(1));
-        } else {
-          setCurrentAudio(null);
-        }
       });
     }
 
@@ -198,6 +190,33 @@ export function AudioPlaybar() {
       }
     };
   }, []);
+  
+  // Handle audio finished - runs when wavesurfer fires 'finish' event
+  useEffect(() => {
+    if (!isPlaying && wavesurferRef.current && currentAudio) {
+      const handleFinish = () => {
+        console.log('[AudioPlaybar] Audio finished, checking queue...', { queueLength: audioQueue.length, autoplay });
+        // Auto-play next in queue if autoplay is enabled
+        if (audioQueue.length > 0 && autoplay) {
+          const nextAudio = audioQueue[0];
+          console.log('[AudioPlaybar] Playing next in queue:', nextAudio.title);
+          setCurrentAudio(nextAudio);
+          setAudioQueue(prev => prev.slice(1));
+        } else if (autoplay) {
+          console.log('[AudioPlaybar] Queue empty, waiting for new calls...');
+          setCurrentAudio(null);
+        } else {
+          console.log('[AudioPlaybar] Autoplay disabled, stopping playback');
+          setCurrentAudio(null);
+        }
+      };
+      
+      wavesurferRef.current.on('finish', handleFinish);
+      return () => {
+        wavesurferRef.current?.un('finish', handleFinish);
+      };
+    }
+  }, [isPlaying, autoplay, audioQueue, currentAudio]);
 
   // Load audio when currentAudio changes
   useEffect(() => {
@@ -270,29 +289,64 @@ export function AudioPlaybar() {
     setVolume(value[0]);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (currentAudio) {
       const audioUrl = currentAudio.audioUrl || 
         (currentAudio.audioSegmentId ? `/api/audio/segment/${currentAudio.audioSegmentId}` :
          currentAudio.rdioCallId ? `/api/audio/rdio/${currentAudio.rdioCallId}` : null);
       
       if (audioUrl) {
-        const link = document.createElement('a');
-        link.href = audioUrl;
-        link.download = `talkgroup_${currentAudio.talkgroup}_${currentAudio.timestamp}.m4a`;
-        link.click();
+        try {
+          // Fetch the audio file
+          const response = await fetch(audioUrl);
+          const blob = await response.blob();
+          
+          // Create a blob URL and download
+          const blobUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = `dispatch_${currentAudio.callType?.replace(/[^a-zA-Z0-9]/g, '_') || 'call'}_${new Date(currentAudio.timestamp).toISOString().slice(0, 19).replace(/[^0-9]/g, '')}.m4a`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          // Clean up the blob URL
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+        } catch (error) {
+          console.error('Error downloading audio:', error);
+          toast({
+            title: "Download Failed",
+            description: "Unable to download audio file",
+            variant: "destructive"
+          });
+        }
       }
     }
   };
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     if (currentAudio) {
-      const clipUrl = `${window.location.origin}/audio/${currentAudio.id}`;
-      navigator.clipboard.writeText(clipUrl);
-      toast({
-        title: "Link Copied",
-        description: "Audio clip link has been copied to clipboard",
-      });
+      const audioUrl = currentAudio.audioUrl || 
+        (currentAudio.audioSegmentId ? `/api/audio/segment/${currentAudio.audioSegmentId}` :
+         currentAudio.rdioCallId ? `/api/audio/rdio/${currentAudio.rdioCallId}` : null);
+      
+      if (audioUrl) {
+        const fullUrl = `${window.location.origin}${audioUrl}`;
+        try {
+          await navigator.clipboard.writeText(fullUrl);
+          toast({
+            title: "Link Copied",
+            description: "Direct audio link copied to clipboard",
+          });
+        } catch (error) {
+          console.error('Error copying link:', error);
+          toast({
+            title: "Copy Failed",
+            description: "Unable to copy link to clipboard",
+            variant: "destructive"
+          });
+        }
+      }
     }
   };
 

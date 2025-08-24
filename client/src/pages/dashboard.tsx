@@ -2,6 +2,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { CallFeedSidebar } from "@/components/CallFeedSidebar";
 import { MainDashboard } from "@/components/MainDashboard";
 import { CompactCallDetailModal } from "@/components/CompactCallDetailModal";
+import { CallDetailModal } from "@/components/CallDetailModal";
 import { HospitalCallsTab } from "@/components/HospitalCallsTab";
 import { HospitalAnalyticsDashboard } from "@/components/HospitalAnalyticsDashboard";
 import PublicHealthAnalytics from "@/pages/PublicHealthAnalytics";

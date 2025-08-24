@@ -114,17 +114,15 @@ async function populateUnitTags() {
   }
 }
 
-// Run if called directly
-if (require.main === module) {
-  populateUnitTags()
-    .then(() => {
-      console.log('\nDone!');
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error('Failed:', error);
-      process.exit(1);
-    });
-}
+// Run the population
+populateUnitTags()
+  .then(() => {
+    console.log('\nDone!');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('Failed:', error);
+    process.exit(1);
+  });
 
 export { populateUnitTags };

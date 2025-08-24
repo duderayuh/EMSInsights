@@ -51,7 +51,7 @@ function AppleMapView({ calls, onCallSelect, newCallIds }: AppleMapViewProps) {
   const [weatherOverlayEnabled, setWeatherOverlayEnabled] = useState(false);
   const [aircraftOverlayEnabled, setAircraftOverlayEnabled] = useState(false);
   const [dispatchOverlayEnabled, setDispatchOverlayEnabled] = useState(true);
-  const [hospitalOverlayEnabled, setHospitalOverlayEnabled] = useState(false);
+  const [hospitalOverlayEnabled, setHospitalOverlayEnabled] = useState(true);
   const [clusterOverlayEnabled, setClusterOverlayEnabled] = useState(false);
   const [selectedClusters, setSelectedClusters] = useState<Set<string>>(new Set());
   const [dispatchTimeFilter, setDispatchTimeFilter] = useState('24h');

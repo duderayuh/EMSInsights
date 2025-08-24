@@ -212,6 +212,53 @@ html {
   animation: pulse-marker 2s ease-in-out infinite;
 }
 
+/* Enhanced tab navigation styles */
+[role="tablist"] button {
+  position: relative;
+  overflow: hidden;
+}
+
+[role="tablist"] button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(59, 130, 246, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+[role="tablist"] button:hover::before {
+  width: 100%;
+  height: 100%;
+}
+
+[role="tablist"] button[data-state="active"] {
+  position: relative;
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+}
+
+[role="tablist"] button[data-state="active"]::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 80%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+  transform: translateX(-50%);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
 /* Custom scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;

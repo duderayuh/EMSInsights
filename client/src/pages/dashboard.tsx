@@ -16,6 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Call } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Radio, Stethoscope, Users, BarChart3, Heart } from "lucide-react";
 
 export default function Dashboard() {
   const [selectedCall, setSelectedCall] = useState<Call | null>(null);
@@ -212,14 +213,46 @@ export default function Dashboard() {
           }, 300);
         }
       }}>
-        <div className="border-b border-border bg-gray-50 dark:bg-gray-800 px-6">
-          <TabsList className="grid w-[900px] grid-cols-5">
-            <TabsTrigger value="dashboard">Dispatch</TabsTrigger>
-            <TabsTrigger value="hospital">EMS-Hospital Calls</TabsTrigger>
-            <TabsTrigger value="incidents">Unit Tracking</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            <TabsTrigger value="public-health">Public Health</TabsTrigger>
-          </TabsList>
+        <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border-b border-gray-700 shadow-lg">
+          <div className="px-6 py-3">
+            <TabsList className="bg-transparent flex gap-2 w-full justify-center p-1">
+              <TabsTrigger 
+                value="dashboard" 
+                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=inactive]:bg-gray-800/50 data-[state=inactive]:text-gray-300 data-[state=inactive]:hover:bg-gray-700/50 data-[state=inactive]:hover:text-white transition-all duration-200 px-6 py-3 rounded-lg flex items-center gap-2 font-medium"
+              >
+                <Radio className="h-4 w-4" />
+                <span>Dispatch</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="hospital" 
+                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=inactive]:bg-gray-800/50 data-[state=inactive]:text-gray-300 data-[state=inactive]:hover:bg-gray-700/50 data-[state=inactive]:hover:text-white transition-all duration-200 px-6 py-3 rounded-lg flex items-center gap-2 font-medium"
+              >
+                <Stethoscope className="h-4 w-4" />
+                <span>EMS-Hospital</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="incidents" 
+                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=inactive]:bg-gray-800/50 data-[state=inactive]:text-gray-300 data-[state=inactive]:hover:bg-gray-700/50 data-[state=inactive]:hover:text-white transition-all duration-200 px-6 py-3 rounded-lg flex items-center gap-2 font-medium"
+              >
+                <Users className="h-4 w-4" />
+                <span>Unit Tracking</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="analytics" 
+                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=inactive]:bg-gray-800/50 data-[state=inactive]:text-gray-300 data-[state=inactive]:hover:bg-gray-700/50 data-[state=inactive]:hover:text-white transition-all duration-200 px-6 py-3 rounded-lg flex items-center gap-2 font-medium"
+              >
+                <BarChart3 className="h-4 w-4" />
+                <span>Analytics</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="public-health" 
+                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=inactive]:bg-gray-800/50 data-[state=inactive]:text-gray-300 data-[state=inactive]:hover:bg-gray-700/50 data-[state=inactive]:hover:text-white transition-all duration-200 px-6 py-3 rounded-lg flex items-center gap-2 font-medium"
+              >
+                <Heart className="h-4 w-4" />
+                <span>Public Health</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
         </div>
         
         <TabsContent value="dashboard" className="m-0 h-[calc(100vh-120px)]">

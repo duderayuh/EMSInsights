@@ -64,8 +64,7 @@ export function AudioPlaybar() {
     refetchInterval: 30000,
   });
 
-  // Track processed call IDs to avoid duplicates
-  const processedCallsRef = useRef<Set<string>>(new Set());
+  // Track last check time for processing
   const lastCheckTimeRef = useRef<number>(Date.now());
   
   // Process new and updated calls from WebSocket when autoplay is enabled

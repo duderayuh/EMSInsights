@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import AppleMapView from '@/components/AppleMapView';
 import { format } from 'date-fns';
+import MobileLayout from '@/components/MobileLayout';
 
 interface PublicHealthSummary {
   totalCalls: number;
@@ -107,6 +108,16 @@ function GenerateInsightsButton() {
 export default function PublicHealthAnalytics() {
   const [dateRange, setDateRange] = useState('7');
   const [selectedComplaint, setSelectedComplaint] = useState('all');
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Fetch summary data
   const { data: summary, isLoading: summaryLoading } = useQuery<PublicHealthSummary>({
@@ -215,7 +226,7 @@ export default function PublicHealthAnalytics() {
     );
   }
 
-  return (
+  const content = (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
@@ -478,4 +489,14 @@ export default function PublicHealthAnalytics() {
       </Tabs>
     </div>
   );
+  
+  if (isMobile) {
+    return (
+      <MobileLayout title="Public Health">
+        {content}
+      </MobileLayout>
+    );
+  }
+  
+  return content;
 }

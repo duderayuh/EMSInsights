@@ -40,7 +40,7 @@ export default function MobileBottomNav() {
       icon: Truck,
     },
     {
-      href: "/hospital-calls",
+      href: "/hospital",
       label: "Hospitals",
       icon: Building2,
     },

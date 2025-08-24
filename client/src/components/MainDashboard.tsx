@@ -45,10 +45,12 @@ export function MainDashboard({ calls, stats, onCallSelect, newCallIds, hoveredC
 
   return (
     <main className="flex-1 flex flex-col">
-      {/* Map View */}
-      <div className="flex-1 relative">
-        {/* Apple Maps Container */}
-        <AppleMapView calls={calls} onCallSelect={onCallSelect} newCallIds={newCallIds} hoveredCallId={hoveredCallId} />
+      {/* Map View with padding for AudioPlaybar */}
+      <div className="flex-1 relative pb-20">
+        {/* Apple Maps Container with full height minus AudioPlaybar */}
+        <div className="absolute inset-0 bottom-20">
+          <AppleMapView calls={calls} onCallSelect={onCallSelect} newCallIds={newCallIds} hoveredCallId={hoveredCallId} />
+        </div>
         
         {/* Fallback for when map is loading */}
         {calls.length === 0 && (

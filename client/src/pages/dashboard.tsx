@@ -258,7 +258,7 @@ export default function Dashboard() {
         </div>
         
         <TabsContent value="dashboard" className="m-0 h-[calc(100vh-120px)]">
-          <div className="flex h-[calc(100%-80px)] overflow-hidden"> {/* Reduced height for AudioPlaybar */}
+          <div className="flex h-full overflow-hidden">
             <CallFeedSidebar
               calls={filteredCalls}
               onCallSelect={handleCallSelect}

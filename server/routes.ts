@@ -683,16 +683,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Don't fetch unit tags for all calls - let frontend fetch them on demand
-      // This was causing extreme slowness with many calls
+      // Fetch units for calls to filter based on completeness
+      const callIds = activeCalls.map(call => call.id);
+      const unitTagsMap = await storage.getBatchCallUnits(callIds);
       
-      // Enhance calls with talkgroup descriptions and voice type
-      const enhancedCalls = activeCalls.map(call => ({
+      // Filter out incomplete calls (must have units, location, and call type)
+      const completeCalls = activeCalls.filter(call => {
+        const units = unitTagsMap[call.id] || [];
+        
+        // Must have units
+        if (units.length === 0) {
+          return false;
+        }
+        
+        // Must have a valid location/address
+        if (!call.location || call.location === 'none' || call.location === '') {
+          return false;
+        }
+        
+        // Must have a valid call type (not Unknown or empty)
+        if (!call.callType || call.callType === 'Unknown' || call.callType === '') {
+          return false;
+        }
+        
+        return true;
+      });
+      
+      // Enhance calls with talkgroup descriptions, voice type, and units
+      const enhancedCalls = completeCalls.map(call => ({
         ...call,
         talkgroupDescription: call.talkgroup ? talkgroupMapper.getDescription(call.talkgroup) : null,
         talkgroupDisplayName: call.talkgroup ? talkgroupMapper.getDisplayName(call.talkgroup) : null,
         voiceTypeDescription: call.voiceType ? VoiceTypeClassifier.getVoiceTypeDescription(call.voiceType) : null,
-        units: [] // Empty for now, fetch on demand if needed
+        units: unitTagsMap[call.id] || []
       }));
       
       res.json(enhancedCalls);

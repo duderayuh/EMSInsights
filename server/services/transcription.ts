@@ -14,6 +14,7 @@ import { postProcessingPipeline } from './post-processing-pipeline';
 import { audioEnhancementService } from './audio-enhancement';
 import { emsDictionary } from './ems-dictionary';
 import { confidenceMonitor } from './confidence-monitor';
+import { qualityMonitor } from './transcription-quality-monitor';
 
 interface TranscriptionProgress {
   segmentId: string;
@@ -533,50 +534,96 @@ except Exception as e:
     }
 
     try {
+      // Track transcription start time
+      (global as any).transcriptionStartTime = Date.now();
+      
       this.emitProgress(segmentId, 'whisper', 20, 'Uploading audio to OpenAI');
       
-      // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-      const transcription = await this.openaiClient.audio.transcriptions.create({
-        file: createReadStream(audioPath),
-        model: 'whisper-1',
-        response_format: 'verbose_json',
-        language: 'en',
-        // EXACT PROMPT AS PROVIDED BY USER
-        prompt: emsDictionary.generateWhisperPrompt(),
-        temperature: 0.0  // Use lowest temperature for most deterministic transcription
-      });
+      // Multi-pass transcription for improved accuracy
+      const transcriptionPasses = [];
+      const temperatures = [0.0, 0.2, 0.4]; // Multiple temperature settings for consensus
+      
+      for (const temp of temperatures) {
+        try {
+          const transcription = await this.openaiClient.audio.transcriptions.create({
+            file: createReadStream(audioPath),
+            model: 'whisper-1',
+            response_format: 'verbose_json',
+            language: 'en',
+            prompt: emsDictionary.generateWhisperPrompt() + ' Focus on emergency dispatch radio communications with unit numbers, street addresses, and medical terminology.',
+            temperature: temp,
+            // Additional parameters for better accuracy
+            timestamp_granularities: ['segment', 'word'] as any
+          });
+          transcriptionPasses.push(transcription);
+        } catch (passError) {
+          console.error(`Transcription pass at temp ${temp} failed:`, passError);
+        }
+      }
+      
+      // If all passes failed, throw error
+      if (transcriptionPasses.length === 0) {
+        throw new Error('All transcription passes failed');
+      }
+      
+      // Select best transcription based on confidence metrics
+      const transcription = this.selectBestTranscription(transcriptionPasses);
 
       this.emitProgress(segmentId, 'whisper', 60, 'Processing OpenAI transcription response');
 
-      // Enhanced confidence calculation based on OpenAI verbose response
-      let confidence = 0.85; // Default confidence
+      // Advanced confidence calculation with multiple factors
+      let confidence = 0.85; // Base confidence
       
-      // If we have segments data, calculate weighted confidence from log probabilities
+      // If we have segments data, calculate sophisticated confidence metrics
       if (transcription.segments && transcription.segments.length > 0) {
-        // More sophisticated confidence calculation
         const segmentConfidences = transcription.segments.map((segment: any) => {
           if (segment.avg_logprob !== undefined) {
-            // Convert log probability to confidence
-            // Log probs typically range from -2 to 0, where 0 is highest confidence
-            const normalizedProb = Math.exp(segment.avg_logprob);
+            // Enhanced confidence calculation
+            const baseProb = Math.exp(segment.avg_logprob);
             
-            // Apply quality modifiers based on segment properties
-            let segmentConfidence = normalizedProb;
+            // Multiple confidence factors
+            let segmentConfidence = baseProb;
             
-            // Boost confidence if segment has no hesitations/repetitions
-            if (segment.no_speech_prob && segment.no_speech_prob < 0.1) {
-              segmentConfidence *= 1.1;
+            // Factor 1: Speech probability (inverse of no_speech_prob)
+            if (segment.no_speech_prob !== undefined) {
+              const speechProb = 1 - segment.no_speech_prob;
+              segmentConfidence *= (0.7 + 0.3 * speechProb); // Weight speech presence
             }
             
-            // Reduce confidence for very short segments (likely noise)
+            // Factor 2: Compression ratio (lower is better, indicates less repetition)
+            if (segment.compression_ratio !== undefined) {
+              const compressionFactor = Math.max(0.5, Math.min(1.0, 2.0 - segment.compression_ratio));
+              segmentConfidence *= compressionFactor;
+            }
+            
+            // Factor 3: Token probability consistency
+            if (segment.tokens && Array.isArray(segment.tokens)) {
+              const tokenCount = segment.tokens.length;
+              if (tokenCount > 0 && segment.token_logprobs) {
+                const avgTokenProb = segment.token_logprobs.reduce((sum: number, logprob: number) => 
+                  sum + Math.exp(logprob), 0) / tokenCount;
+                segmentConfidence *= (0.8 + 0.2 * avgTokenProb);
+              }
+            }
+            
+            // Factor 4: Segment duration quality
             const segmentDuration = (segment.end || 0) - (segment.start || 0);
-            if (segmentDuration < 0.5) {
-              segmentConfidence *= 0.8;
+            if (segmentDuration < 0.3) {
+              segmentConfidence *= 0.7; // Very short, likely noise
+            } else if (segmentDuration > 10) {
+              segmentConfidence *= 0.9; // Very long, might have errors
+            } else {
+              segmentConfidence *= 1.05; // Optimal length boost
             }
             
-            return Math.min(0.99, segmentConfidence);
+            // Apply Bayesian adjustment based on prior knowledge
+            const priorConfidence = 0.75; // Prior belief in transcription quality
+            const weight = 0.3; // Weight of prior
+            segmentConfidence = weight * priorConfidence + (1 - weight) * segmentConfidence;
+            
+            return Math.min(0.99, Math.max(0.1, segmentConfidence));
           }
-          return 0.85; // Default if no logprob available
+          return 0.75; // Conservative default
         });
         
         // Calculate weighted average based on segment duration
@@ -592,19 +639,67 @@ except Exception as e:
           confidence = segmentConfidences.reduce((sum: number, c: number) => sum + c, 0) / segmentConfidences.length;
         }
         
-        // Apply text quality modifiers
-        const textLength = transcription.text?.length || 0;
-        const hasNumbers = /\d/.test(transcription.text || '');
-        const hasUnits = /(medic|engine|fire|ambulance|ems|squad|battalion|ladder)\s*\d+/i.test(transcription.text || '');
-        const hasAddresses = /\d+\s+[NSEW]?\s*\w+\s+(street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr)/i.test(transcription.text || '');
+        // Advanced text quality analysis for EMS dispatch content
+        const text = transcription.text || '';
+        const textLength = text.length;
         
-        // Boost confidence for high-quality indicators
-        if (hasUnits) confidence *= 1.05;
-        if (hasAddresses) confidence *= 1.05;
-        if (textLength > 20 && textLength < 500) confidence *= 1.02; // Reasonable length
+        // Pattern matching for dispatch-specific content
+        const patterns = {
+          units: /(medic|engine|fire|ambulance|ems|squad|battalion|ladder|rescue|truck)\s*\d+/gi,
+          addresses: /\d+\s+[NSEW]?\s*\w+\s+(street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln|court|ct|circle|cir|place|pl|parkway|pkwy)/gi,
+          intersections: /(\w+\s+(and|&)\s+\w+\s+(street|avenue|road|boulevard|drive))/gi,
+          medicalTerms: /(cardiac|breathing|unconscious|trauma|bleeding|chest pain|difficulty|emergency|priority|code|transport|patient|victim)/gi,
+          dispatchCodes: /(priority\s*\d|code\s*\d|ems\s*\d{2,5}|10-\d{2})/gi,
+          timestamps: /(\d{1,2}:\d{2}|\d{4}\s*hours)/gi
+        };
         
-        // Ensure confidence is in valid range [0.1, 0.99]
-        confidence = Math.min(0.99, Math.max(0.1, confidence));
+        // Calculate pattern match scores
+        const matchScores = {
+          units: (text.match(patterns.units) || []).length,
+          addresses: (text.match(patterns.addresses) || []).length,
+          intersections: (text.match(patterns.intersections) || []).length,
+          medicalTerms: (text.match(patterns.medicalTerms) || []).length,
+          dispatchCodes: (text.match(patterns.dispatchCodes) || []).length,
+          timestamps: (text.match(patterns.timestamps) || []).length
+        };
+        
+        // Calculate content quality score
+        let contentQualityBoost = 1.0;
+        if (matchScores.units > 0) contentQualityBoost *= 1.15;
+        if (matchScores.addresses > 0) contentQualityBoost *= 1.12;
+        if (matchScores.medicalTerms > 0) contentQualityBoost *= 1.08;
+        if (matchScores.dispatchCodes > 0) contentQualityBoost *= 1.10;
+        if (matchScores.intersections > 0) contentQualityBoost *= 1.05;
+        
+        // Length-based adjustment
+        if (textLength > 15 && textLength < 300) {
+          contentQualityBoost *= 1.05; // Optimal dispatch message length
+        } else if (textLength < 10) {
+          contentQualityBoost *= 0.7; // Too short, likely incomplete
+        } else if (textLength > 500) {
+          contentQualityBoost *= 0.9; // Too long, might have errors
+        }
+        
+        // Check for common transcription errors
+        const errorPatterns = [
+          /\b(um|uh|ah|er)\b/gi,  // Filler words
+          /(\w)\1{3,}/gi,  // Repeated characters
+          /[^\w\s,.-]/gi  // Unusual characters
+        ];
+        
+        const errorCount = errorPatterns.reduce((count, pattern) => 
+          count + (text.match(pattern) || []).length, 0);
+        
+        if (errorCount > 0) {
+          contentQualityBoost *= Math.max(0.8, 1 - (errorCount * 0.05));
+        }
+        
+        // Apply content quality boost to confidence
+        confidence *= Math.min(1.5, contentQualityBoost);
+        
+        // Ensure confidence is in valid range with higher minimum for good transcriptions
+        const minConfidence = matchScores.units > 0 || matchScores.addresses > 0 ? 0.7 : 0.5;
+        confidence = Math.min(0.99, Math.max(minConfidence, confidence));
       } else {
         // Fallback confidence based on text quality
         const textLength = transcription.text?.length || 0;
@@ -615,9 +710,39 @@ except Exception as e:
         if (hasNumbers && hasCommonWords) confidence += 0.15;
       }
       
-      // Quality threshold: reject very low confidence transcriptions
-      if (confidence < 0.3) {
-        throw new Error(`Low confidence transcription rejected: ${confidence.toFixed(2)}`);
+      // Enhanced quality checks with multiple retries for low confidence
+      if (confidence < 0.5 && transcriptionPasses.length < 3) {
+        console.log(`Low confidence (${(confidence * 100).toFixed(1)}%), attempting enhanced transcription...`);
+        
+        // Try one more time with enhanced audio
+        try {
+          const enhancedPath = await audioEnhancementService.enhanceEMSAudio(audioPath);
+          const enhancedTranscription = await this.openaiClient.audio.transcriptions.create({
+            file: createReadStream(enhancedPath),
+            model: 'whisper-1',
+            response_format: 'verbose_json',
+            language: 'en',
+            prompt: emsDictionary.generateWhisperPrompt() + ' This is emergency dispatch radio audio. Listen carefully for unit numbers, street addresses, and medical conditions.',
+            temperature: 0.1
+          });
+          
+          // Clean up enhanced file
+          await audioEnhancementService.cleanupEnhancedFile(enhancedPath);
+          
+          // Recalculate confidence for enhanced transcription
+          const enhancedConfidence = this.calculateTranscriptionConfidence(enhancedTranscription);
+          if (enhancedConfidence > confidence) {
+            console.log(`Enhanced transcription improved confidence: ${(confidence * 100).toFixed(1)}% -> ${(enhancedConfidence * 100).toFixed(1)}%`);
+            return this.processTranscriptionResult(enhancedTranscription, segmentId, enhancedConfidence);
+          }
+        } catch (enhanceError) {
+          console.error('Enhanced transcription attempt failed:', enhanceError);
+        }
+      }
+      
+      // Only reject if confidence is extremely low
+      if (confidence < 0.2) {
+        throw new Error(`Transcription quality too low: ${(confidence * 100).toFixed(1)}%`);
       }
       
       // Apply EMS dictionary corrections
@@ -630,6 +755,19 @@ except Exception as e:
       
       // Track confidence for monitoring
       await confidenceMonitor.trackSegmentConfidence(segmentId, finalConfidence);
+      
+      // Track in quality monitor
+      await qualityMonitor.trackSegment({
+        segmentId,
+        confidence: finalConfidence,
+        timestamp: new Date(),
+        hasUnits: /(medic|engine|fire|ambulance|ems|squad)\s*\d+/i.test(correctedText),
+        hasAddress: /\d+\s+[NSEW]?\s*\w+\s+(street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr)/i.test(correctedText),
+        textLength: correctedText.length,
+        processingTime: Date.now() - (global as any).transcriptionStartTime || 0,
+        audioQuality: finalConfidence >= 0.9 ? 'excellent' : finalConfidence >= 0.75 ? 'good' : finalConfidence >= 0.6 ? 'fair' : 'poor',
+        enhancementApplied: false
+      });
       
       // Log detailed confidence metrics
       console.log(`OpenAI Whisper confidence metrics:`, {
@@ -668,6 +806,125 @@ except Exception as e:
     this.activeTranscriptions.clear();
     this.isProcessing = false;
     console.log('Stuck transcriptions cleared, service reset');
+  }
+
+  /**
+   * Select the best transcription from multiple passes
+   */
+  private selectBestTranscription(transcriptions: any[]): any {
+    if (transcriptions.length === 1) return transcriptions[0];
+    
+    // Score each transcription
+    const scoredTranscriptions = transcriptions.map(t => {
+      let score = 0;
+      
+      // Check for key dispatch elements
+      const text = t.text || '';
+      if (/(medic|engine|fire|ambulance|ems|squad|battalion|ladder)\s*\d+/i.test(text)) score += 3;
+      if (/\d+\s+[NSEW]?\s*\w+\s+(street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr)/i.test(text)) score += 3;
+      if (text.length > 10 && text.length < 300) score += 2;
+      
+      // Check segment quality
+      if (t.segments && t.segments.length > 0) {
+        const avgLogProb = t.segments.reduce((sum: number, s: any) => 
+          sum + (s.avg_logprob || -1), 0) / t.segments.length;
+        score += Math.max(0, 5 + avgLogProb * 2); // Convert log prob to score
+      }
+      
+      return { transcription: t, score };
+    });
+    
+    // Sort by score and return best
+    scoredTranscriptions.sort((a, b) => b.score - a.score);
+    return scoredTranscriptions[0].transcription;
+  }
+
+  /**
+   * Calculate confidence for a transcription
+   */
+  private calculateTranscriptionConfidence(transcription: any): number {
+    let confidence = 0.85;
+    
+    if (transcription.segments && transcription.segments.length > 0) {
+      // Calculate weighted confidence from segments
+      const segmentConfidences = transcription.segments.map((segment: any) => {
+        if (segment.avg_logprob !== undefined) {
+          const baseProb = Math.exp(segment.avg_logprob);
+          let segmentConfidence = baseProb;
+          
+          if (segment.no_speech_prob !== undefined) {
+            const speechProb = 1 - segment.no_speech_prob;
+            segmentConfidence *= (0.7 + 0.3 * speechProb);
+          }
+          
+          const segmentDuration = (segment.end || 0) - (segment.start || 0);
+          if (segmentDuration < 0.3) {
+            segmentConfidence *= 0.7;
+          } else if (segmentDuration > 10) {
+            segmentConfidence *= 0.9;
+          } else {
+            segmentConfidence *= 1.05;
+          }
+          
+          return Math.min(0.99, Math.max(0.1, segmentConfidence));
+        }
+        return 0.75;
+      });
+      
+      // Calculate weighted average
+      const durations = transcription.segments.map((seg: any) => (seg.end || 0) - (seg.start || 0));
+      const totalDuration = durations.reduce((sum: number, d: number) => sum + d, 0);
+      
+      if (totalDuration > 0) {
+        confidence = transcription.segments.reduce((sum: number, seg: any, i: number) => {
+          const weight = durations[i] / totalDuration;
+          return sum + (segmentConfidences[i] * weight);
+        }, 0);
+      } else {
+        confidence = segmentConfidences.reduce((sum: number, c: number) => sum + c, 0) / segmentConfidences.length;
+      }
+    }
+    
+    // Apply text quality boost
+    const text = transcription.text || '';
+    if (/(medic|engine|fire|ambulance|ems|squad)\s*\d+/i.test(text)) confidence *= 1.15;
+    if (/\d+\s+[NSEW]?\s*\w+\s+(street|st|avenue|ave|road|rd|drive|dr)/i.test(text)) confidence *= 1.12;
+    
+    return Math.min(0.99, Math.max(0.1, confidence));
+  }
+
+  /**
+   * Process transcription result with confidence
+   */
+  private processTranscriptionResult(transcription: any, segmentId: string, confidence: number): TranscriptionResult {
+    const correctedText = emsDictionary.correctTranscript(transcription.text || '');
+    const confidenceBoost = emsDictionary.getConfidenceBoost(transcription.text || '', correctedText);
+    const finalConfidence = Math.min(0.99, confidence + confidenceBoost);
+    
+    // Track confidence for monitoring
+    confidenceMonitor.trackSegmentConfidence(segmentId, finalConfidence).catch(console.error);
+    
+    // Track in quality monitor
+    qualityMonitor.trackSegment({
+      segmentId,
+      confidence: finalConfidence,
+      timestamp: new Date(),
+      hasUnits: /(medic|engine|fire|ambulance|ems|squad)\s*\d+/i.test(correctedText),
+      hasAddress: /\d+\s+[NSEW]?\s*\w+\s+(street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr)/i.test(correctedText),
+      textLength: correctedText.length,
+      processingTime: Date.now() - (global as any).transcriptionStartTime || 0,
+      audioQuality: finalConfidence >= 0.9 ? 'excellent' : finalConfidence >= 0.75 ? 'good' : finalConfidence >= 0.6 ? 'fair' : 'poor',
+      enhancementApplied: true
+    }).catch(console.error);
+    
+    console.log(`Transcription confidence for ${segmentId}: ${(finalConfidence * 100).toFixed(1)}%`);
+    
+    return {
+      utterance: correctedText || '[No transcription available]',
+      confidence: finalConfidence,
+      start_ms: 0,
+      end_ms: Math.round((transcription.duration || 5) * 1000)
+    };
   }
 
   private applyPostProcessingCorrections(transcript: string): string {

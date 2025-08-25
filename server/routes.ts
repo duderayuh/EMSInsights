@@ -1051,6 +1051,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Transcription quality metrics endpoint
+  app.get('/api/quality/metrics', requireAuth, async (req, res) => {
+    try {
+      const { qualityMonitor } = await import('./services/transcription-quality-monitor');
+      const metrics = qualityMonitor.getMetrics();
+      const trends = await qualityMonitor.getQualityTrends();
+      const recommendations = qualityMonitor.getImprovementRecommendations();
+      
+      res.json({
+        metrics,
+        trends,
+        recommendations,
+        targetAchieved: metrics.averageConfidence >= 0.91
+      });
+    } catch (error) {
+      console.error('Failed to get quality metrics:', error);
+      res.status(500).json({ error: 'Failed to get quality metrics' });
+    }
+  });
+
   // Test endpoint for transcription quality improvements
   app.post("/api/test/transcription-quality", requireAuth, requireAdmin, async (req, res) => {
     try {

@@ -771,14 +771,35 @@ function AppleMapView({ calls, onCallSelect, newCallIds, hoveredCallId }: AppleM
       {/* Map Legend - Positioned below upper left controls */}
       <div className="absolute top-64 left-4 z-10">
         <Card className="p-3 bg-background/95 backdrop-blur w-36">
-          <div className="text-xs font-semibold mb-2">Call Types</div>
+          <div className="text-xs font-semibold mb-2">Active Call Types</div>
           <div className="flex flex-col gap-1 text-xs">
-            <div>🏥 Medical</div>
-            <div>🚗 Vehicle</div>
-            <div>🔥 Fire</div>
-            <div>☣️ Hazmat</div>
-            <div>🤕 Injury</div>
-            <div>❤️ Cardiac</div>
+            {(() => {
+              // Get unique call types from filtered calls currently on the map
+              const filteredCalls = getFilteredCalls();
+              const activeCallTypes = new Map<string, string>();
+              
+              filteredCalls.forEach(call => {
+                if (call.callType && call.callType !== 'Unknown' && call.callType !== 'Test') {
+                  const emoji = getCallTypeEmoji(call.callType);
+                  if (!activeCallTypes.has(emoji)) {
+                    // Store the first call type we see for each emoji
+                    activeCallTypes.set(emoji, call.callType);
+                  }
+                }
+              });
+              
+              // If no active calls, show a message
+              if (activeCallTypes.size === 0) {
+                return <div className="text-gray-500">No active calls</div>;
+              }
+              
+              // Sort by call type name and display
+              return Array.from(activeCallTypes.entries())
+                .sort((a, b) => a[1].localeCompare(b[1]))
+                .map(([emoji, callType]) => (
+                  <div key={callType}>{emoji} {callType}</div>
+                ));
+            })()}
           </div>
         </Card>
       </div>

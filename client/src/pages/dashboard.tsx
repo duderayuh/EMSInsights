@@ -45,13 +45,13 @@ export default function Dashboard() {
   // Get all calls for analytics and categories
   const { data: calls = [], isLoading } = useQuery({
     queryKey: ['/api/calls'],
-    refetchInterval: 5000, // Refetch every 5 seconds to reduce map updates
+    refetchInterval: 30000, // Refetch every 30 seconds (was 5 seconds)
   });
 
   // Get active calls for sidebar
   const { data: activeCallsData = [], isLoading: isActiveLoading } = useQuery({
     queryKey: ['/api/calls/active'],
-    refetchInterval: 2000, // Refetch every 2 seconds for more responsive updates
+    refetchInterval: 10000, // Refetch every 10 seconds (was 2 seconds)
   });
 
   // Search query for entire database
@@ -63,7 +63,7 @@ export default function Dashboard() {
 
   const { data: stats } = useQuery({
     queryKey: ['/api/stats'],
-    refetchInterval: 10000, // Refetch every 10 seconds
+    refetchInterval: 30000, // Refetch every 30 seconds (was 10 seconds)
   });
 
   // Get unread alerts count for mobile navigation

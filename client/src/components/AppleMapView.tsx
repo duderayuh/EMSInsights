@@ -227,6 +227,44 @@ function AppleMapView({ calls, onCallSelect, newCallIds, hoveredCallId }: AppleM
     });
   }, [calls, dispatchOverlayEnabled, dispatchTimeFilter]);
 
+  // Get active call types for the legend
+  const getActiveCallTypes = useCallback(() => {
+    const filteredCalls = getFilteredCalls();
+    const callTypeMap = new Map<string, string>();
+    
+    // Get unique call types from filtered calls
+    filteredCalls.forEach(call => {
+      if (call.callType && call.callType !== 'Test' && call.callType !== 'Unknown') {
+        const emoji = getCallTypeEmoji(call.callType);
+        // Group similar call types by emoji
+        if (emoji === '🏥' || (call.callType.toLowerCase().includes('medical') && !callTypeMap.has('Medical'))) {
+          callTypeMap.set('Medical', '🏥');
+        } else if (emoji === '🚗' || call.callType.toLowerCase().includes('vehicle') || call.callType.toLowerCase().includes('accident') || call.callType.toLowerCase().includes('mvc')) {
+          callTypeMap.set('Vehicle', '🚗');
+        } else if (emoji === '🔥' || call.callType.toLowerCase().includes('fire')) {
+          callTypeMap.set('Fire', '🔥');
+        } else if (emoji === '☣️' || call.callType.toLowerCase().includes('hazmat') || call.callType.toLowerCase().includes('chemical')) {
+          callTypeMap.set('Hazmat', '☣️');
+        } else if (emoji === '🤕' || call.callType.toLowerCase().includes('injur')) {
+          callTypeMap.set('Injury', '🤕');
+        } else if (emoji === '❤️' || emoji === '💔' || call.callType.toLowerCase().includes('cardiac') || call.callType.toLowerCase().includes('heart')) {
+          callTypeMap.set('Cardiac', '❤️');
+        } else if (emoji === '💊' || call.callType.toLowerCase().includes('overdose')) {
+          callTypeMap.set('Overdose', '💊');
+        } else if (emoji === '🤒' || call.callType.toLowerCase().includes('sick')) {
+          callTypeMap.set('Sick', '🤒');
+        } else if (emoji === '😵' || call.callType.toLowerCase().includes('unconscious')) {
+          callTypeMap.set('Unconscious', '😵');
+        } else if (!callTypeMap.has(call.callType)) {
+          // Add specific call type if it doesn't fit a category
+          callTypeMap.set(call.callType, emoji);
+        }
+      }
+    });
+    
+    return Array.from(callTypeMap.entries());
+  }, [getFilteredCalls]);
+
   // Load clusters
   const loadClusters = useCallback(async () => {
     try {
@@ -769,19 +807,21 @@ function AppleMapView({ calls, onCallSelect, newCallIds, hoveredCallId }: AppleM
       )}
 
       {/* Map Legend - Positioned below upper left controls */}
-      <div className="absolute top-64 left-4 z-10">
-        <Card className="p-3 bg-background/95 backdrop-blur w-36">
-          <div className="text-xs font-semibold mb-2">Call Types</div>
-          <div className="flex flex-col gap-1 text-xs">
-            <div>🏥 Medical</div>
-            <div>🚗 Vehicle</div>
-            <div>🔥 Fire</div>
-            <div>☣️ Hazmat</div>
-            <div>🤕 Injury</div>
-            <div>❤️ Cardiac</div>
+      {dispatchOverlayEnabled && (() => {
+        const activeCallTypes = getActiveCallTypes();
+        return activeCallTypes.length > 0 ? (
+          <div className="absolute top-64 left-4 z-10">
+            <Card className="p-3 bg-background/95 backdrop-blur w-36">
+              <div className="text-xs font-semibold mb-2">Active Call Types</div>
+              <div className="flex flex-col gap-1 text-xs">
+                {activeCallTypes.map(([type, emoji]) => (
+                  <div key={type}>{emoji} {type}</div>
+                ))}
+              </div>
+            </Card>
           </div>
-        </Card>
-      </div>
+        ) : null;
+      })()}
     </div>
   );
 }

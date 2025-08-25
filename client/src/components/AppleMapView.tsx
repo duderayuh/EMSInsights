@@ -262,7 +262,8 @@ function AppleMapView({ calls, onCallSelect, newCallIds, hoveredCallId }: AppleM
       }
     });
     
-    return Array.from(callTypeMap.entries());
+    // Sort alphabetically by type name
+    return Array.from(callTypeMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [getFilteredCalls]);
 
   // Load clusters

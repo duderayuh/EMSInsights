@@ -122,28 +122,23 @@ export function AudioPlaybar() {
       // Skip if already processed
       if (processedCallsRef.current.has(uniqueId)) return false;
       
-      // Must have audio
+      // Must have audio segment ID to play
       const hasAudio = call.audioSegmentId;
       if (!hasAudio) return false;
-      
-      // Must have transcript (indicates processing is complete)
-      if (!call.transcript || call.transcript === '[No transcription available]') return false;
       
       // Check talkgroup match
       const matchesTalkgroup = selectedTalkgroup === "all" || 
         (call.talkgroup && call.talkgroup === selectedTalkgroup);
       if (!matchesTalkgroup) return false;
       
-      // Filter by call type - exclude hospital and unknown calls
-      const isValidCallType = call.callType && 
-        call.callType !== 'Hospital' && 
-        call.callType !== 'Unknown' &&
-        call.callType !== 'Non-Emergency Content';
-      if (!isValidCallType) return false;
+      // Check if call is dispatch (not hospital)
+      const isDispatchCall = !call.talkgroup || 
+        (call.talkgroup !== '10258' && call.talkgroup !== '10255' && call.talkgroup !== '10256');
+      if (!isDispatchCall) return false;
       
-      // Check if call is recent (within last 5 minutes)
+      // Check if call is recent (within last 10 minutes to allow for processing time)
       const callTime = new Date(call.timestamp).getTime();
-      const isRecent = (Date.now() - callTime) < 5 * 60 * 1000;
+      const isRecent = (Date.now() - callTime) < 10 * 60 * 1000;
       if (!isRecent) return false;
       
       return true;
@@ -152,9 +147,9 @@ export function AudioPlaybar() {
     if (eligibleCalls.length > 0) {
       console.log(`[AudioPlaybar] Found ${eligibleCalls.length} eligible calls for auto-play`);
       
-      // Sort by timestamp (newest first)
+      // Sort by timestamp (oldest first for queue order)
       const sortedCalls = eligibleCalls.sort((a, b) => 
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       );
       
       // Add to queue
@@ -170,9 +165,9 @@ export function AudioPlaybar() {
           timestamp: call.timestamp instanceof Date ? call.timestamp.toISOString() : call.timestamp,
           duration: 0,
           talkgroup: call.talkgroup || '',
-          title: `${call.callType || 'Call'} at ${call.location || 'unknown location'}`,
-          callType: call.callType,
-          location: call.location
+          title: `${call.callType || (call.transcript ? 'Dispatch' : 'New Call')} at ${call.location || 'Location TBD'}`,
+          callType: call.callType || 'Dispatch',
+          location: call.location || 'Processing...'
         };
       });
       
@@ -195,6 +190,86 @@ export function AudioPlaybar() {
     // Update last check time
     lastCheckTimeRef.current = Date.now();
   }, [liveCalls, autoplay, selectedTalkgroup, currentAudio, isPlaying]);
+
+  // Also check for new calls periodically in case WebSocket misses some
+  useEffect(() => {
+    if (!autoplay) return;
+    
+    const checkForNewCalls = async () => {
+      try {
+        const response = await fetch('/api/calls/active');
+        if (response.ok) {
+          const activeCalls = await response.json();
+          
+          // Find calls to queue
+          const newCalls = activeCalls.filter((call: any) => {
+            const uniqueId = `${call.id}-${call.audioSegmentId || 'no-audio'}`;
+            
+            // Must be new and have audio
+            if (processedCallsRef.current.has(uniqueId)) return false;
+            if (!call.audioSegmentId) return false;
+            
+            // Check talkgroup
+            const matchesTalkgroup = selectedTalkgroup === "all" || 
+              (call.talkgroup && call.talkgroup === selectedTalkgroup);
+            if (!matchesTalkgroup) return false;
+            
+            // Check if dispatch call
+            const isDispatchCall = !call.talkgroup || 
+              (call.talkgroup !== '10258' && call.talkgroup !== '10255' && call.talkgroup !== '10256');
+            if (!isDispatchCall) return false;
+            
+            // Check recency
+            const callTime = new Date(call.timestamp).getTime();
+            const isRecent = (Date.now() - callTime) < 10 * 60 * 1000;
+            return isRecent;
+          });
+          
+          if (newCalls.length > 0) {
+            console.log(`[AudioPlaybar] Found ${newCalls.length} new calls to queue from API`);
+            
+            const audioFiles = newCalls.map((call: any) => {
+              const uniqueId = `${call.id}-${call.audioSegmentId}`;
+              processedCallsRef.current.add(uniqueId);
+              
+              return {
+                id: uniqueId,
+                audioSegmentId: call.audioSegmentId,
+                timestamp: call.timestamp,
+                duration: 0,
+                talkgroup: call.talkgroup || '',
+                title: `${call.callType || 'New Call'} at ${call.location || 'Location TBD'}`,
+                callType: call.callType || 'Dispatch',
+                location: call.location || 'Processing...'
+              };
+            });
+            
+            setAudioQueue(prev => {
+              const updated = [...prev, ...audioFiles].slice(0, 20);
+              console.log(`[AudioPlaybar] Queue updated from API: ${updated.length} items`);
+              return updated;
+            });
+            
+            // Start playing if nothing is playing
+            if (!currentAudio && !isPlaying && audioFiles.length > 0) {
+              const firstItem = audioFiles[0];
+              console.log('[AudioPlaybar] Auto-starting playback from API check:', firstItem.id);
+              setCurrentAudio(firstItem);
+              setAudioQueue(prev => prev.slice(1));
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[AudioPlaybar] Error checking for new calls:', error);
+      }
+    };
+    
+    // Check immediately and then every 5 seconds
+    checkForNewCalls();
+    const interval = setInterval(checkForNewCalls, 5000);
+    
+    return () => clearInterval(interval);
+  }, [autoplay, selectedTalkgroup, currentAudio, isPlaying]);
 
   // Initialize WaveSurfer
   useEffect(() => {

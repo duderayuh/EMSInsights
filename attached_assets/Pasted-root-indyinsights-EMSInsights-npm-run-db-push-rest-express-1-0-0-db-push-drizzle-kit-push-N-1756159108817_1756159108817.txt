@@ -1,0 +1,45 @@
+root@indyinsights:~/EMSInsights# npm run db:push
+
+> rest-express@1.0.0 db:push
+> drizzle-kit push
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/root/EMSInsights/drizzle.config.ts'
+DATABASE_URL, ensure the database is provisioned
+root@indyinsights:~/EMSInsights# pm2 restart all
+Use --update-env to update environment variables
+[PM2] Applying action restartProcessId on app [all](ids: [ 0 ])
+[PM2] [ems-insight](0) ✓
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ ems-insight        │ cluster  │ 8    │  │ 0%       │ 0b       │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+root@indyinsights:~/EMSInsights# pm2 restart all
+Use --update-env to update environment variables
+[PM2] Applying action restartProcessId on app [all](ids: [ 0 ])
+[PM2] [ems-insight](0) ✓
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ ems-insight        │ cluster  │ 13   │  │ 0%       │ 0b       │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+root@indyinsights:~/EMSInsights# pm2 status
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ ems-insight        │ cluster  │ 14   │  │ 0%       │ 0b       │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+root@indyinsights:~/EMSInsights# pm2 status
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ ems-insight        │ cluster  │ 14   │  │ 0%       │ 0b       │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+root@indyinsights:~/EMSInsights# pm2 status
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ ems-insight        │ cluster  │ 15   │  │ 0%       │ 0b       │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+root@indyinsights:~/EMSInsights# 

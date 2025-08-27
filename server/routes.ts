@@ -556,8 +556,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return true;
           }
           
-          // Filter out low confidence transcriptions (<30% instead of 50%)
-          if (call.confidence !== null && call.confidence < 0.3) {
+          // Filter out low confidence transcriptions (<90%)
+          if (call.confidence !== null && call.confidence < 0.9) {
             filteredCount++;
             return false;
           }
@@ -658,8 +658,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return true;
           }
           
-          // Filter out low confidence transcriptions
-          if (call.confidence !== null && call.confidence < 0.3) {
+          // Filter out low confidence transcriptions (<90%)
+          if (call.confidence !== null && call.confidence < 0.9) {
             return false;
           }
           

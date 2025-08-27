@@ -492,7 +492,15 @@ export default function SettingsPage() {
 
   const renderGeneralSettings = () => (
     <div className="space-y-4 sm:space-y-6">
-      {settings.map((setting: SystemSetting) => (
+      {settings.length === 0 ? (
+        <Card className="bg-gray-50 dark:bg-gray-800/50">
+          <CardContent className="p-8 text-center">
+            <Settings className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 dark:text-gray-400">No general settings configured yet</p>
+            <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Settings will appear here once configured in the database</p>
+          </CardContent>
+        </Card>
+      ) : settings.map((setting: SystemSetting) => (
         <Card key={setting.key} className="bg-gray-50 dark:bg-gray-800/50">
           <CardHeader className="pb-3 p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
@@ -574,7 +582,15 @@ export default function SettingsPage() {
         </div>
         
         <div className="grid gap-4">
-          {talkgroups.map((talkgroup: CustomTalkgroup) => {
+          {talkgroups.length === 0 ? (
+            <Card className="bg-gray-50 dark:bg-gray-800/50">
+              <CardContent className="p-8 text-center">
+                <Radio className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 dark:text-gray-400">No talkgroups configured yet</p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Click "Add Talkgroup" to configure dispatch and hospital channels</p>
+              </CardContent>
+            </Card>
+          ) : talkgroups.map((talkgroup: CustomTalkgroup) => {
             const hospitalData = hospitalMap[talkgroup.talkgroupId];
             const isHospital = talkgroup.category === 'hospital';
             
@@ -791,7 +807,15 @@ export default function SettingsPage() {
       </div>
       
       <div className="grid gap-4">
-        {callTypes.map((callType: CallType) => (
+        {callTypes.length === 0 ? (
+          <Card className="bg-gray-50 dark:bg-gray-800/50">
+            <CardContent className="p-8 text-center">
+              <Tag className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600 dark:text-gray-400">No call types configured yet</p>
+              <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Click "Add Call Type" to define emergency call categories</p>
+            </CardContent>
+          </Card>
+        ) : callTypes.map((callType: CallType) => (
           <Card key={callType.id} className="bg-gray-50 dark:bg-gray-800/50">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">

@@ -3309,7 +3309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all custom hospitals from database
-  app.get('/api/hospitals', async (req, res) => {
+  app.get('/api/hospitals', requireAuth, async (req, res) => {
     try {
       const hospitals = await storage.getAllCustomHospitals();
       res.json(hospitals);
@@ -3320,7 +3320,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get single custom hospital by ID
-  app.get('/api/hospitals/:id', async (req, res) => {
+  app.get('/api/hospitals/:id', requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const hospital = await storage.getCustomHospital(id);
@@ -3894,7 +3894,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // System Settings API Routes
-  app.get('/api/settings', async (req, res) => {
+  app.get('/api/settings', requireAuth, async (req, res) => {
     try {
       const settings = await storage.getAllSystemSettings();
       res.json(settings);
@@ -3904,7 +3904,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/settings/:key', async (req, res) => {
+  app.get('/api/settings/:key', requireAuth, async (req, res) => {
     try {
       const setting = await storage.getSystemSetting(req.params.key);
       if (!setting) {
@@ -3948,7 +3948,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Custom Hospitals API Routes
 
-  app.get('/api/hospitals/:id', async (req, res) => {
+  app.get('/api/hospitals/:id', requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const hospital = await storage.getCustomHospital(id);
@@ -4009,7 +4009,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Custom Talkgroups API Routes
-  app.get('/api/talkgroups', async (req, res) => {
+  app.get('/api/talkgroups', requireAuth, async (req, res) => {
     try {
       const talkgroups = await storage.getAllCustomTalkgroups();
       res.json(talkgroups);
@@ -4019,7 +4019,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/talkgroups/:id', async (req, res) => {
+  app.get('/api/talkgroups/:id', requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const talkgroup = await storage.getCustomTalkgroup(id);
@@ -4182,7 +4182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Call Types API Routes
-  app.get('/api/call-types', async (req, res) => {
+  app.get('/api/call-types', requireAuth, async (req, res) => {
     try {
       const callTypes = await storage.getCallTypes();
       res.json(callTypes);
@@ -4192,7 +4192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/call-types/:id', async (req, res) => {
+  app.get('/api/call-types/:id', requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const callType = await storage.getCallType(id);

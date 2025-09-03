@@ -35,7 +35,7 @@ const createUserSchema = z.object({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
-  role: z.enum(['admin', 'user']),
+  role: z.enum(['admin', 'user', 'hospital_admin', 'super_admin']),
 });
 
 const editUserSchema = z.object({
@@ -43,7 +43,7 @@ const editUserSchema = z.object({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
-  role: z.enum(['admin', 'user']),
+  role: z.enum(['admin', 'user', 'hospital_admin', 'super_admin']),
   isActive: z.boolean(),
 });
 
@@ -87,7 +87,14 @@ export default function UserManagement() {
 
   const createUserMutation = useMutation({
     mutationFn: async (userData: CreateUserForm) => {
-      return apiRequest('POST', '/api/users', userData);
+      // Convert empty email to null to avoid database unique constraint issues
+      const processedData = {
+        ...userData,
+        email: userData.email || null,
+        firstName: userData.firstName || null,
+        lastName: userData.lastName || null,
+      };
+      return apiRequest('POST', '/api/users', processedData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
@@ -109,7 +116,14 @@ export default function UserManagement() {
 
   const updateUserMutation = useMutation({
     mutationFn: async ({ id, userData }: { id: number; userData: EditUserForm }) => {
-      return apiRequest('PUT', `/api/users/${id}`, userData);
+      // Convert empty email to null to avoid database unique constraint issues
+      const processedData = {
+        ...userData,
+        email: userData.email || null,
+        firstName: userData.firstName || null,
+        lastName: userData.lastName || null,
+      };
+      return apiRequest('PUT', `/api/users/${id}`, processedData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
@@ -161,7 +175,7 @@ export default function UserManagement() {
       email: user.email || '',
       firstName: user.firstName || '',
       lastName: user.lastName || '',
-      role: user.role as 'admin' | 'user',
+      role: user.role as 'admin' | 'user' | 'hospital_admin' | 'super_admin',
       isActive: user.isActive,
     });
     setIsEditDialogOpen(true);

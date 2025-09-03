@@ -11,12 +11,18 @@ export class AuthService {
   async createUser(userData: InsertUser): Promise<User> {
     const hashedPassword = await bcrypt.hash(userData.password, 12);
     
+    // Ensure empty strings are converted to null for database unique constraints
+    const cleanData = {
+      ...userData,
+      password: hashedPassword,
+      email: userData.email || null,
+      firstName: userData.firstName || null,
+      lastName: userData.lastName || null,
+    };
+    
     const [user] = await db
       .insert(users)
-      .values({
-        ...userData,
-        password: hashedPassword,
-      })
+      .values(cleanData)
       .returning();
 
     return user;

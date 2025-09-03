@@ -21,7 +21,7 @@ import { streetMatcher } from "./services/street-matcher";
 import { rdioScannerManager } from "./services/rdio-scanner-manager";
 import { callLinkingService } from "./services/call-linking-service";
 import { authService } from "./services/auth-service";
-import { requireAuth, requireAdmin, optionalAuth } from "./middleware/auth-middleware";
+import { requireAuth, requireAdmin, requireAdminAccess, optionalAuth, requireSuperAdmin } from "./middleware/auth-middleware";
 import { conversationAnalyzer } from "./services/conversation-analyzer";
 import { googleAddressValidation } from "./services/address-validation";
 import { weatherService } from "./services/weather-service";
@@ -397,8 +397,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // User management routes (admin only)
-  app.get("/api/users", requireAuth, requireAdmin, async (req, res) => {
+  // User management routes (admin access required - super_admin, admin, or hospital_admin)
+  app.get("/api/users", requireAuth, requireAdminAccess, async (req, res) => {
     try {
       const users = await authService.getAllUsers();
       res.json(users.map(user => ({
@@ -418,9 +418,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/users", requireAuth, requireAdmin, async (req, res) => {
+  app.post("/api/users", requireAuth, requireAdminAccess, async (req, res) => {
     try {
-      const userData = insertUserSchema.parse(req.body);
+      // Clean up empty strings to null for database constraints
+      const cleanedData = {
+        ...req.body,
+        email: req.body.email || null,
+        firstName: req.body.firstName || null,
+        lastName: req.body.lastName || null
+      };
+      
+      const userData = insertUserSchema.parse(cleanedData);
       const user = await authService.createUser(userData);
       res.json({
         id: user.id,
@@ -432,20 +440,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isActive: user.isActive,
         createdAt: user.createdAt
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Create user error:', error);
+      
+      // Handle specific database errors
+      if (error.code === '23505') {
+        if (error.constraint === 'users_username_unique') {
+          return res.status(400).json({ error: "Username already exists" });
+        }
+        if (error.constraint === 'users_email_unique') {
+          return res.status(400).json({ error: "Email already in use" });
+        }
+      }
+      
       res.status(400).json({ error: "Failed to create user" });
     }
   });
 
-  app.put("/api/users/:id", requireAuth, requireAdmin, async (req, res) => {
+  app.put("/api/users/:id", requireAuth, requireAdminAccess, async (req, res) => {
     try {
       const userId = parseInt(req.params.id);
-      const updates = req.body;
+      const updates = {
+        ...req.body,
+        email: req.body.email || null,
+        firstName: req.body.firstName || null,
+        lastName: req.body.lastName || null
+      };
+      delete updates.id; // Prevent ID modification
+      
       const user = await authService.updateUser(userId, updates);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
+      
       res.json({
         id: user.id,
         username: user.username,
@@ -456,13 +483,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isActive: user.isActive,
         createdAt: user.createdAt
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Update user error:', error);
+      
+      // Handle specific database errors
+      if (error.code === '23505') {
+        if (error.constraint === 'users_username_unique') {
+          return res.status(400).json({ error: "Username already exists" });
+        }
+        if (error.constraint === 'users_email_unique') {
+          return res.status(400).json({ error: "Email already in use" });
+        }
+      }
+      
       res.status(400).json({ error: "Failed to update user" });
     }
   });
 
-  app.delete("/api/users/:id", requireAuth, requireAdmin, async (req, res) => {
+  app.delete("/api/users/:id", requireAuth, requireSuperAdmin, async (req, res) => {
     try {
       const userId = parseInt(req.params.id);
       const deleted = await authService.deleteUser(userId);
@@ -865,8 +903,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete call endpoint (admin only)
-  app.delete("/api/calls/:id", requireAuth, requireAdmin, async (req, res) => {
+  // Delete call endpoint (admin access required)
+  app.delete("/api/calls/:id", requireAuth, requireAdminAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const call = await storage.getCall(id);
@@ -890,8 +928,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update call endpoint (admin only)
-  app.patch("/api/calls/:id", requireAuth, requireAdmin, async (req, res) => {
+  // Update call endpoint (admin access required)
+  app.patch("/api/calls/:id", requireAuth, requireAdminAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const updates = req.body;
@@ -942,8 +980,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Fix address endpoint (admin only)
-  app.post("/api/calls/:id/fix-address", requireAuth, requireAdmin, async (req, res) => {
+  // Fix address endpoint (admin access required)
+  app.post("/api/calls/:id/fix-address", requireAuth, requireAdminAccess, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       

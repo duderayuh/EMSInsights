@@ -232,9 +232,11 @@ export function AudioPlaybar() {
   
   // Handle audio finished - runs when wavesurfer fires 'finish' event
   useEffect(() => {
-    if (!isPlaying && wavesurferRef.current && currentAudio) {
+    if (wavesurferRef.current && currentAudio) {
       const handleFinish = () => {
         console.log('[AudioPlaybar] Audio finished, checking queue...', { queueLength: audioQueue.length, autoplay });
+        setIsPlaying(false);
+        
         // Auto-play next in queue if autoplay is enabled
         if (audioQueue.length > 0 && autoplay) {
           const nextAudio = audioQueue[0];
@@ -255,7 +257,7 @@ export function AudioPlaybar() {
         wavesurferRef.current?.un('finish', handleFinish);
       };
     }
-  }, [isPlaying, autoplay, audioQueue, currentAudio]);
+  }, [autoplay, audioQueue, currentAudio]);
 
   // Load audio when currentAudio changes
   useEffect(() => {

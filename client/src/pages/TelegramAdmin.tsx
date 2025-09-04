@@ -71,10 +71,7 @@ export default function TelegramAdmin() {
 
   // Create keyword mutation
   const createKeywordMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('/api/telegram/keywords', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }),
+    mutationFn: (data: any) => apiRequest('POST', '/api/telegram/keywords', data),
     onSuccess: () => {
       toast({ title: 'Success', description: 'Keyword added successfully' });
       queryClient.invalidateQueries({ queryKey: ['/api/telegram/keywords'] });
@@ -99,10 +96,7 @@ export default function TelegramAdmin() {
 
   // Update keyword mutation
   const updateKeywordMutation = useMutation({
-    mutationFn: ({ id, data }: any) => apiRequest(`/api/telegram/keywords/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data)
-    }),
+    mutationFn: ({ id, data }: any) => apiRequest('PUT', `/api/telegram/keywords/${id}`, data),
     onSuccess: () => {
       toast({ title: 'Success', description: 'Keyword updated successfully' });
       queryClient.invalidateQueries({ queryKey: ['/api/telegram/keywords'] });
@@ -111,9 +105,7 @@ export default function TelegramAdmin() {
 
   // Delete keyword mutation
   const deleteKeywordMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/telegram/keywords/${id}`, {
-      method: 'DELETE'
-    }),
+    mutationFn: (id: number) => apiRequest('DELETE', `/api/telegram/keywords/${id}`),
     onSuccess: () => {
       toast({ title: 'Success', description: 'Keyword deleted successfully' });
       queryClient.invalidateQueries({ queryKey: ['/api/telegram/keywords'] });
@@ -122,10 +114,7 @@ export default function TelegramAdmin() {
 
   // Save Telegram config mutation
   const saveConfigMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('/api/telegram/config', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }),
+    mutationFn: (data: any) => apiRequest('POST', '/api/telegram/config', data),
     onSuccess: () => {
       toast({ title: 'Success', description: 'Telegram configuration saved successfully' });
       queryClient.invalidateQueries({ queryKey: ['/api/telegram/config'] });
@@ -141,9 +130,7 @@ export default function TelegramAdmin() {
 
   // Test connection mutation
   const testConnectionMutation = useMutation({
-    mutationFn: () => apiRequest('/api/telegram/test', {
-      method: 'POST'
-    }),
+    mutationFn: () => apiRequest('POST', '/api/telegram/test'),
     onSuccess: () => {
       toast({ title: 'Success', description: 'Test message sent to Telegram channel' });
     },

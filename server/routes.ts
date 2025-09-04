@@ -5068,6 +5068,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Special test endpoint for cardiac arrest notification
+  app.post('/api/telegram/test-cardiac', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { telegramBot } = await import('./services/telegram-bot');
+      const fs = await import('fs').then(m => m.promises);
+      
+      // Initialize bot if needed
+      await telegramBot.initialize();
+      
+      const testMessage = `🚨 **HIGH PRIORITY - CARDIAC ARREST**
+
+📍 **Location:** 5432 N MERIDIAN ST, INDIANAPOLIS
+🏥 **Closest Hospital:** Methodist Hospital (2.3 miles)
+📝 **Call Type:** Medical Emergency
+
+**Transcript:**
+_"Medic 6 respond code 3 for cardiac arrest at 5432 North Meridian Street, patient unresponsive, CPR in progress. Paramedics on scene, requesting immediate backup."_
+
+🚓 **Units:** Medic 6, Squad 15
+⏰ **Time:** ${new Date().toLocaleString('en-US', { timeZone: 'America/Indiana/Indianapolis' })}
+🔊 **Talkgroup:** 10202 - EMS Dispatch
+
+🔑 **Keyword Match:** cardiac arrest (HIGH severity)
+
+---
+_EMS-Insight Test Notification - Live data monitoring active_`;
+
+      // Read the test audio file
+      const audioBuffer = await fs.readFile('/tmp/test_cardiac_arrest.mp3');
+      
+      // Send message with audio
+      await telegramBot.sendMessage(testMessage, audioBuffer);
+      
+      res.json({ success: true, message: 'Test cardiac arrest notification sent to Telegram' });
+    } catch (error) {
+      console.error('Error sending test cardiac notification:', error);
+      res.status(500).json({ error: 'Failed to send test notification' });
+    }
+  });
+
   app.get('/api/telegram/notifications', requireAuth, async (req, res) => {
     try {
       const { callId, keywordId, status, limit = 50 } = req.query;

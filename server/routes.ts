@@ -18,6 +18,7 @@ import { KeywordMonitorService } from './services/keyword-monitor';
 import { RdioScannerManager } from './services/rdio-scanner-manager';
 import { AudioProcessor } from './services/audio-processor';
 import { TranscriptionService } from './services/transcription';
+import { authService } from './services/auth-service';
 
 // Initialize services
 const telegramBotService = new TelegramBotService();
@@ -31,6 +32,9 @@ let wss: WebSocketServer;
 
 export async function registerRoutes(app: Express) {
   // Storage is already initialized as a singleton
+  
+  // Initialize default admin user if it doesn't exist
+  await initializeDefaultAdmin();
 
   // Create HTTP server for WebSocket
   const server = createServer(app);
@@ -61,6 +65,70 @@ export async function registerRoutes(app: Express) {
       }
     });
   }
+
+  // Authentication routes
+  app.post('/api/auth/login', async (req: Request, res: Response) => {
+    try {
+      const { username, password } = req.body;
+      
+      // Verify user credentials
+      const user = await authService.verifyUser({ username, password });
+      if (!user) {
+        return res.status(401).json({ error: 'Invalid username or password' });
+      }
+      
+      // Create session
+      const session = await authService.createSession(user.id);
+      
+      // Set session cookie
+      res.cookie('sessionId', session.id, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      });
+      
+      // Return user info (without password)
+      const { password: _, ...safeUser } = user;
+      res.json({ user: safeUser });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({ error: 'Login failed' });
+    }
+  });
+
+  app.post('/api/auth/logout', async (req: Request, res: Response) => {
+    try {
+      const sessionId = req.cookies?.sessionId;
+      if (sessionId) {
+        await authService.deleteSession(sessionId);
+      }
+      res.clearCookie('sessionId');
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Logout failed' });
+    }
+  });
+
+  app.get('/api/auth/me', async (req: Request, res: Response) => {
+    try {
+      const sessionId = req.cookies?.sessionId;
+      if (!sessionId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      
+      const user = await authService.getSessionUser(sessionId);
+      if (!user) {
+        return res.status(401).json({ error: 'Invalid session' });
+      }
+      
+      // Return user info (without password)
+      const { password: _, ...safeUser } = user;
+      res.json({ user: safeUser });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get user info' });
+    }
+  });
 
   // User routes
   app.get('/api/users', async (_req: Request, res: Response) => {
@@ -315,6 +383,33 @@ export async function registerRoutes(app: Express) {
   await initializeTelegramBot();
   
   return server;
+}
+
+async function initializeDefaultAdmin() {
+  try {
+    // Check if admin user exists
+    const existingAdmin = await storage.getUserByUsername('admin');
+    if (!existingAdmin) {
+      console.log('Creating default admin user...');
+      
+      // Create default admin user
+      await authService.createUser({
+        username: 'admin',
+        password: 'admin123',
+        email: 'admin@example.com',
+        firstName: 'System',
+        lastName: 'Administrator',
+        role: 'super_admin'
+      });
+      
+      console.log('✅ Default admin user created');
+      console.log('Username: admin');
+      console.log('Password: admin123');
+      console.log('Please change the password after first login!');
+    }
+  } catch (error) {
+    console.error('Error creating default admin user:', error);
+  }
 }
 
 async function initializeTelegramBot() {

@@ -531,3 +531,116 @@ export const AlertCategory = {
 export type AlertTypeType = typeof AlertType[keyof typeof AlertType];
 export type AlertSeverityType = typeof AlertSeverity[keyof typeof AlertSeverity];
 export type AlertCategoryType = typeof AlertCategory[keyof typeof AlertCategory];
+
+// Telegram notification system tables
+export const telegramConfig = pgTable("telegram_config", {
+  id: serial("id").primaryKey(),
+  botToken: text("bot_token").notNull(),
+  channelId: text("channel_id").notNull(),
+  channelName: text("channel_name"),
+  webhookUrl: text("webhook_url"),
+  webhookSecret: text("webhook_secret"),
+  isActive: boolean("is_active").default(true),
+  testMode: boolean("test_mode").default(false),
+  rateLimitPerMinute: integer("rate_limit_per_minute").default(20),
+  lastMessageAt: timestamp("last_message_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdBy: integer("created_by").references(() => users.id)
+});
+
+export const notificationKeywords = pgTable("notification_keywords", {
+  id: serial("id").primaryKey(),
+  keyword: text("keyword").notNull().unique(),
+  description: text("description"),
+  category: text("category"), // 'medical', 'fire', 'accident', 'critical', 'custom'
+  severity: text("severity").default("medium"), // 'high', 'medium', 'low'
+  isActive: boolean("is_active").default(true),
+  matchType: text("match_type").default("contains"), // 'exact', 'contains', 'regex'
+  caseSensitive: boolean("case_sensitive").default(false),
+  notifyHospitalCalls: boolean("notify_hospital_calls").default(true),
+  triggerCount: integer("trigger_count").default(0),
+  lastTriggered: timestamp("last_triggered"),
+  metadata: jsonb("metadata"), // Additional configuration
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdBy: integer("created_by").references(() => users.id)
+});
+
+export const telegramNotifications = pgTable("telegram_notifications", {
+  id: serial("id").primaryKey(),
+  callId: integer("call_id").references(() => calls.id),
+  hospitalCallId: integer("hospital_call_id").references(() => hospitalCalls.id),
+  keywordId: integer("keyword_id").references(() => notificationKeywords.id),
+  messageId: text("message_id"), // Telegram message ID for updates
+  channelId: text("channel_id"),
+  status: text("status").default("pending"), // 'pending', 'sent', 'failed', 'retry'
+  retryCount: integer("retry_count").default(0),
+  messageContent: text("message_content"),
+  audioUrl: text("audio_url"),
+  audioMp3Path: text("audio_mp3_path"),
+  location: text("location"),
+  closestHospital: text("closest_hospital"),
+  hospitalDistance: real("hospital_distance"),
+  hospitalEta: integer("hospital_eta"), // in minutes
+  transcript: text("transcript"),
+  callType: text("call_type"),
+  priority: text("priority"),
+  timestamp: timestamp("timestamp"),
+  sentAt: timestamp("sent_at"),
+  failureReason: text("failure_reason"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow()
+});
+
+export const notificationQueue = pgTable("notification_queue", {
+  id: serial("id").primaryKey(),
+  callId: integer("call_id").references(() => calls.id),
+  keywordId: integer("keyword_id").references(() => notificationKeywords.id),
+  priority: integer("priority").default(0), // Higher number = higher priority
+  status: text("status").default("queued"), // 'queued', 'processing', 'completed', 'failed'
+  scheduledFor: timestamp("scheduled_for").defaultNow(),
+  processedAt: timestamp("processed_at"),
+  attempts: integer("attempts").default(0),
+  maxAttempts: integer("max_attempts").default(3),
+  error: text("error"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow()
+});
+
+// Create insert schemas for Telegram system
+export const insertTelegramConfigSchema = createInsertSchema(telegramConfig).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastMessageAt: true
+});
+
+export const insertNotificationKeywordSchema = createInsertSchema(notificationKeywords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  triggerCount: true,
+  lastTriggered: true
+});
+
+export const insertTelegramNotificationSchema = createInsertSchema(telegramNotifications).omit({
+  id: true,
+  createdAt: true
+});
+
+export const insertNotificationQueueSchema = createInsertSchema(notificationQueue).omit({
+  id: true,
+  createdAt: true,
+  processedAt: true
+});
+
+// Telegram system types
+export type TelegramConfig = typeof telegramConfig.$inferSelect;
+export type InsertTelegramConfig = z.infer<typeof insertTelegramConfigSchema>;
+export type NotificationKeyword = typeof notificationKeywords.$inferSelect;
+export type InsertNotificationKeyword = z.infer<typeof insertNotificationKeywordSchema>;
+export type TelegramNotification = typeof telegramNotifications.$inferSelect;
+export type InsertTelegramNotification = z.infer<typeof insertTelegramNotificationSchema>;
+export type NotificationQueue = typeof notificationQueue.$inferSelect;
+export type InsertNotificationQueue = z.infer<typeof insertNotificationQueueSchema>;

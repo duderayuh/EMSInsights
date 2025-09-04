@@ -3,6 +3,7 @@ import {
   calls, audioSegments, callStats, systemHealth, users, hospitalCalls, hospitalCallSegments,
   systemSettings, customHospitals, customTalkgroups, transcriptionDictionary,
   alerts, alertRules, userAlertPreferences, unitTags, callUnitTags, incidents, callTypes,
+  notificationKeywords, telegramConfig, notificationQueue,
   type Call, type InsertCall, type AudioSegment, type InsertAudioSegment,
   type CallStats, type InsertCallStats, type SystemHealth, type InsertSystemHealth,
   type User, type InsertUser, type HospitalCall, type InsertHospitalCall,
@@ -12,9 +13,12 @@ import {
   type Alert, type InsertAlert, type AlertRule, type InsertAlertRule,
   type UserAlertPreferences, type InsertUserAlertPreferences,
   type UnitTag, type InsertUnitTag, type CallUnitTag, type InsertCallUnitTag,
-  type Incident, type InsertIncident, type CallType, type InsertCallType
+  type Incident, type InsertIncident, type CallType, type InsertCallType,
+  type NotificationKeyword, type InsertNotificationKeyword,
+  type TelegramConfig, type InsertTelegramConfig,
+  type NotificationQueue, type InsertNotificationQueue
 } from '@shared/schema';
-import { eq, desc, like, and, or, gte, lte, sql, inArray, count, notInArray } from 'drizzle-orm';
+import { eq, desc, like, and, or, gte, lte, lt, sql, inArray, count, notInArray } from 'drizzle-orm';
 import type { IStorage } from './storage';
 
 interface SearchParams {
@@ -1230,5 +1234,157 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(desc(incidents.dispatchTime));
+  }
+
+  // Notification Keywords Methods
+  async createNotificationKeyword(keyword: InsertNotificationKeyword): Promise<NotificationKeyword> {
+    const [newKeyword] = await db.insert(notificationKeywords)
+      .values(keyword)
+      .returning();
+    return newKeyword;
+  }
+
+  async getNotificationKeyword(id: number): Promise<NotificationKeyword | undefined> {
+    const [keyword] = await db.select()
+      .from(notificationKeywords)
+      .where(eq(notificationKeywords.id, id));
+    return keyword;
+  }
+
+  async getNotificationKeywordByWord(keyword: string): Promise<NotificationKeyword | undefined> {
+    const [result] = await db.select()
+      .from(notificationKeywords)
+      .where(eq(notificationKeywords.keyword, keyword));
+    return result;
+  }
+
+  async getAllNotificationKeywords(): Promise<NotificationKeyword[]> {
+    return db.select()
+      .from(notificationKeywords)
+      .orderBy(desc(notificationKeywords.createdAt));
+  }
+
+  async getActiveNotificationKeywords(): Promise<NotificationKeyword[]> {
+    return db.select()
+      .from(notificationKeywords)
+      .where(eq(notificationKeywords.isActive, true))
+      .orderBy(notificationKeywords.severity, notificationKeywords.keyword);
+  }
+
+  async updateNotificationKeyword(id: number, updates: Partial<NotificationKeyword>): Promise<NotificationKeyword | undefined> {
+    const cleanedUpdates = { ...updates };
+    delete cleanedUpdates.id;
+    delete cleanedUpdates.createdAt;
+
+    const [updated] = await db.update(notificationKeywords)
+      .set({
+        ...cleanedUpdates,
+        updatedAt: new Date()
+      })
+      .where(eq(notificationKeywords.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteNotificationKeyword(id: number): Promise<boolean> {
+    const result = await db.delete(notificationKeywords)
+      .where(eq(notificationKeywords.id, id));
+    return !!result;
+  }
+
+  // Telegram Configuration Methods
+  async getTelegramConfig(): Promise<TelegramConfig | undefined> {
+    const [config] = await db.select()
+      .from(telegramConfig)
+      .orderBy(desc(telegramConfig.createdAt))
+      .limit(1);
+    return config;
+  }
+
+  async upsertTelegramConfig(config: InsertTelegramConfig): Promise<TelegramConfig> {
+    const existing = await this.getTelegramConfig();
+    
+    if (existing) {
+      const [updated] = await db.update(telegramConfig)
+        .set({
+          ...config,
+          updatedAt: new Date()
+        })
+        .where(eq(telegramConfig.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(telegramConfig)
+        .values(config)
+        .returning();
+      return created;
+    }
+  }
+
+  // Notification Queue Methods
+  async createNotificationQueueItem(item: InsertNotificationQueue): Promise<NotificationQueue> {
+    const [newItem] = await db.insert(notificationQueue)
+      .values(item)
+      .returning();
+    return newItem;
+  }
+
+  async getNotificationQueueItem(id: number): Promise<NotificationQueue | undefined> {
+    const [item] = await db.select()
+      .from(notificationQueue)
+      .where(eq(notificationQueue.id, id));
+    return item;
+  }
+
+  async getQueuedNotifications(limit = 100): Promise<NotificationQueue[]> {
+    return db.select()
+      .from(notificationQueue)
+      .where(eq(notificationQueue.status, 'pending'))
+      .orderBy(notificationQueue.priority, notificationQueue.createdAt)
+      .limit(limit);
+  }
+
+  async getNextQueuedNotification(): Promise<NotificationQueue | undefined> {
+    const [item] = await db.select()
+      .from(notificationQueue)
+      .where(eq(notificationQueue.status, 'pending'))
+      .orderBy(notificationQueue.priority, notificationQueue.createdAt)
+      .limit(1);
+    return item;
+  }
+
+  async updateNotificationStatus(id: number, status: string, error?: string | null): Promise<NotificationQueue | undefined> {
+    const [updated] = await db.update(notificationQueue)
+      .set({
+        status,
+        error,
+        sentAt: status === 'sent' ? new Date() : undefined,
+        updatedAt: new Date()
+      })
+      .where(eq(notificationQueue.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getRecentNotifications(limit = 50): Promise<NotificationQueue[]> {
+    return db.select()
+      .from(notificationQueue)
+      .orderBy(desc(notificationQueue.createdAt))
+      .limit(limit);
+  }
+
+  async clearOldNotifications(daysToKeep = 7): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+    
+    const result = await db.delete(notificationQueue)
+      .where(
+        and(
+          inArray(notificationQueue.status, ['sent', 'failed', 'cancelled']),
+          lt(notificationQueue.createdAt, cutoffDate)
+        )
+      );
+    
+    return result.count || 0;
   }
 }

@@ -1,6 +1,7 @@
 import { 
   calls, audioSegments, callStats, systemHealth, users, hospitalCalls, hospitalCallSegments,
   alerts, alertRules, userAlertPreferences, unitTags, callUnitTags, incidents, callTypes,
+  telegramConfig, notificationKeywords, telegramNotifications, notificationQueue,
   type Call, type InsertCall, type AudioSegment, type InsertAudioSegment,
   type CallStats, type InsertCallStats, type SystemHealth, type InsertSystemHealth,
   type User, type InsertUser, type HospitalCall, type InsertHospitalCall,
@@ -8,7 +9,9 @@ import {
   type Alert, type InsertAlert, type AlertRule, type InsertAlertRule,
   type UserAlertPreferences, type InsertUserAlertPreferences,
   type UnitTag, type InsertUnitTag, type CallUnitTag, type InsertCallUnitTag,
-  type Incident, type InsertIncident, type CallType, type InsertCallType
+  type Incident, type InsertIncident, type CallType, type InsertCallType,
+  type TelegramConfig, type InsertTelegramConfig, type NotificationKeyword, type InsertNotificationKeyword,
+  type TelegramNotification, type InsertTelegramNotification, type NotificationQueue, type InsertNotificationQueue
 } from '@shared/schema';
 import { eq, desc, like, and, gte, lte, sql } from 'drizzle-orm';
 
@@ -121,6 +124,36 @@ export interface IStorage {
   createCallType(data: InsertCallType): Promise<CallType>;
   updateCallType(id: number, updates: Partial<CallType>): Promise<CallType | undefined>;
   deleteCallType(id: number): Promise<boolean>;
+
+  // Telegram Configuration
+  getTelegramConfig(): Promise<TelegramConfig | undefined>;
+  createTelegramConfig(config: InsertTelegramConfig): Promise<TelegramConfig>;
+  updateTelegramConfig(id: number, updates: Partial<TelegramConfig>): Promise<TelegramConfig | undefined>;
+  
+  // Notification Keywords
+  createNotificationKeyword(keyword: InsertNotificationKeyword): Promise<NotificationKeyword>;
+  getNotificationKeyword(id: number): Promise<NotificationKeyword | undefined>;
+  getNotificationKeywordByWord(keyword: string): Promise<NotificationKeyword | undefined>;
+  getAllNotificationKeywords(): Promise<NotificationKeyword[]>;
+  getActiveNotificationKeywords(): Promise<NotificationKeyword[]>;
+  updateNotificationKeyword(id: number, updates: Partial<NotificationKeyword>): Promise<NotificationKeyword | undefined>;
+  deleteNotificationKeyword(id: number): Promise<boolean>;
+  incrementKeywordTriggerCount(id: number): Promise<void>;
+  
+  // Telegram Notifications
+  createTelegramNotification(notification: InsertTelegramNotification): Promise<TelegramNotification>;
+  getTelegramNotification(id: number): Promise<TelegramNotification | undefined>;
+  getTelegramNotificationsByCall(callId: number): Promise<TelegramNotification[]>;
+  getTelegramNotificationsByKeyword(keywordId: number): Promise<TelegramNotification[]>;
+  updateTelegramNotification(id: number, updates: Partial<TelegramNotification>): Promise<TelegramNotification | undefined>;
+  getPendingTelegramNotifications(): Promise<TelegramNotification[]>;
+  
+  // Notification Queue
+  createNotificationQueueItem(item: InsertNotificationQueue): Promise<NotificationQueue>;
+  getQueuedNotifications(limit?: number): Promise<NotificationQueue[]>;
+  updateQueueItem(id: number, updates: Partial<NotificationQueue>): Promise<NotificationQueue | undefined>;
+  deleteQueueItem(id: number): Promise<boolean>;
+  getNextQueuedNotification(): Promise<NotificationQueue | undefined>;
 }
 
 interface SearchParams {

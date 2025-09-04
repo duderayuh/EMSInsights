@@ -19,6 +19,7 @@ import PublicHealthAnalytics from "@/pages/PublicHealthAnalytics";
 import IncidentsPage from "@/pages/incidents";
 import IncidentsMobilePage from "@/pages/incidents-mobile";
 import MobileMapPage from "@/pages/mobile-map";
+import TelegramAdmin from "@/pages/TelegramAdmin";
 import { useAuth } from "@/hooks/useAuth";
 
 // Protected route wrapper component
@@ -128,6 +129,9 @@ function Router() {
       </Route>
       <Route path="/mobile-map">
         {() => <ProtectedRoute component={MobileMapPage} />}
+      </Route>
+      <Route path="/telegram-admin">
+        {() => <ProtectedRoute component={TelegramAdmin} adminOnly={true} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

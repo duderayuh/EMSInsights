@@ -4872,6 +4872,247 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Telegram Notification Keywords API Routes
+  app.get('/api/telegram/keywords', requireAuth, async (req, res) => {
+    try {
+      const keywords = await storage.getAllNotificationKeywords();
+      res.json(keywords);
+    } catch (error) {
+      console.error('Error fetching notification keywords:', error);
+      res.status(500).json({ error: 'Failed to fetch notification keywords' });
+    }
+  });
+
+  app.get('/api/telegram/keywords/active', requireAuth, async (req, res) => {
+    try {
+      const keywords = await storage.getActiveNotificationKeywords();
+      res.json(keywords);
+    } catch (error) {
+      console.error('Error fetching active keywords:', error);
+      res.status(500).json({ error: 'Failed to fetch active keywords' });
+    }
+  });
+
+  app.get('/api/telegram/keywords/:id', requireAuth, async (req, res) => {
+    try {
+      const keywordId = parseInt(req.params.id);
+      const keyword = await storage.getNotificationKeyword(keywordId);
+      if (!keyword) {
+        return res.status(404).json({ error: 'Keyword not found' });
+      }
+      res.json(keyword);
+    } catch (error) {
+      console.error('Error fetching keyword:', error);
+      res.status(500).json({ error: 'Failed to fetch keyword' });
+    }
+  });
+
+  app.post('/api/telegram/keywords', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { 
+        keyword, description, category, severity, 
+        matchType, caseSensitive, notifyHospitalCalls, metadata 
+      } = req.body;
+      
+      // Validate required fields
+      if (!keyword) {
+        return res.status(400).json({ error: 'Keyword is required' });
+      }
+      
+      // Check if keyword already exists
+      const existing = await storage.getNotificationKeywordByWord(keyword);
+      if (existing) {
+        return res.status(409).json({ error: 'Keyword already exists' });
+      }
+      
+      const newKeyword = await storage.createNotificationKeyword({
+        keyword,
+        description: description || null,
+        category: category || null,
+        severity: severity || 'medium',
+        matchType: matchType || 'contains',
+        caseSensitive: caseSensitive || false,
+        notifyHospitalCalls: notifyHospitalCalls !== false,
+        metadata: metadata || null,
+        isActive: true,
+        createdBy: req.user!.id
+      });
+      
+      res.status(201).json(newKeyword);
+    } catch (error) {
+      console.error('Error creating keyword:', error);
+      res.status(500).json({ error: 'Failed to create keyword' });
+    }
+  });
+
+  app.put('/api/telegram/keywords/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const keywordId = parseInt(req.params.id);
+      const updates = req.body;
+      
+      const updated = await storage.updateNotificationKeyword(keywordId, updates);
+      if (!updated) {
+        return res.status(404).json({ error: 'Keyword not found' });
+      }
+      
+      res.json(updated);
+    } catch (error) {
+      console.error('Error updating keyword:', error);
+      res.status(500).json({ error: 'Failed to update keyword' });
+    }
+  });
+
+  app.delete('/api/telegram/keywords/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const keywordId = parseInt(req.params.id);
+      const deleted = await storage.deleteNotificationKeyword(keywordId);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: 'Keyword not found' });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting keyword:', error);
+      res.status(500).json({ error: 'Failed to delete keyword' });
+    }
+  });
+
+  // Telegram Configuration API Routes
+  app.get('/api/telegram/config', requireAuth, async (req, res) => {
+    try {
+      const config = await storage.getTelegramConfig();
+      if (!config) {
+        return res.json({ configured: false });
+      }
+      
+      // Don't expose bot token to frontend
+      const { botToken, ...safeConfig } = config;
+      res.json({ 
+        ...safeConfig, 
+        configured: true,
+        hasToken: !!botToken 
+      });
+    } catch (error) {
+      console.error('Error fetching Telegram config:', error);
+      res.status(500).json({ error: 'Failed to fetch Telegram configuration' });
+    }
+  });
+
+  app.post('/api/telegram/config', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { botToken, channelId, channelName, webhookUrl, webhookSecret, testMode, rateLimitPerMinute } = req.body;
+      
+      if (!botToken || !channelId) {
+        return res.status(400).json({ error: 'Bot token and channel ID are required' });
+      }
+      
+      // Check if config already exists
+      const existing = await storage.getTelegramConfig();
+      
+      let config;
+      if (existing) {
+        // Update existing config
+        config = await storage.updateTelegramConfig(existing.id, {
+          botToken,
+          channelId,
+          channelName: channelName || null,
+          webhookUrl: webhookUrl || null,
+          webhookSecret: webhookSecret || null,
+          testMode: testMode || false,
+          rateLimitPerMinute: rateLimitPerMinute || 20,
+          isActive: true,
+          updatedAt: new Date()
+        });
+      } else {
+        // Create new config
+        config = await storage.createTelegramConfig({
+          botToken,
+          channelId,
+          channelName: channelName || null,
+          webhookUrl: webhookUrl || null,
+          webhookSecret: webhookSecret || null,
+          testMode: testMode || false,
+          rateLimitPerMinute: rateLimitPerMinute || 20,
+          isActive: true,
+          createdBy: req.user!.id
+        });
+      }
+      
+      // Update Telegram bot service with new config
+      const { telegramBot } = await import('./services/telegram-bot');
+      await telegramBot.updateConfig(config!);
+      
+      res.json({ success: true, configured: true });
+    } catch (error) {
+      console.error('Error updating Telegram config:', error);
+      res.status(500).json({ error: 'Failed to update Telegram configuration' });
+    }
+  });
+
+  app.post('/api/telegram/test', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { telegramBot } = await import('./services/telegram-bot');
+      const success = await telegramBot.testConnection();
+      
+      if (success) {
+        res.json({ success: true, message: 'Test message sent successfully' });
+      } else {
+        res.status(500).json({ error: 'Failed to send test message' });
+      }
+    } catch (error) {
+      console.error('Error testing Telegram connection:', error);
+      res.status(500).json({ error: 'Failed to test Telegram connection' });
+    }
+  });
+
+  app.get('/api/telegram/notifications', requireAuth, async (req, res) => {
+    try {
+      const { callId, keywordId, status, limit = 100 } = req.query;
+      
+      let notifications = await storage.getPendingTelegramNotifications();
+      
+      if (callId) {
+        notifications = await storage.getTelegramNotificationsByCall(parseInt(callId as string));
+      } else if (keywordId) {
+        notifications = await storage.getTelegramNotificationsByKeyword(parseInt(keywordId as string));
+      }
+      
+      // Apply status filter if provided
+      if (status && status !== 'all') {
+        notifications = notifications.filter(n => n.status === status);
+      }
+      
+      // Apply limit
+      const limitNum = parseInt(limit as string) || 100;
+      notifications = notifications.slice(0, limitNum);
+      
+      res.json(notifications);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      res.status(500).json({ error: 'Failed to fetch notifications' });
+    }
+  });
+
+  app.get('/api/telegram/status', requireAuth, async (req, res) => {
+    try {
+      const { telegramBot } = await import('./services/telegram-bot');
+      const { keywordMonitor } = await import('./services/keyword-monitor');
+      const { notificationManager } = await import('./services/notification-manager');
+      
+      const status = {
+        telegram: telegramBot.getStatus(),
+        keywords: keywordMonitor.getStatus(),
+        manager: notificationManager.getStatus()
+      };
+      
+      res.json(status);
+    } catch (error) {
+      console.error('Error fetching Telegram system status:', error);
+      res.status(500).json({ error: 'Failed to fetch Telegram system status' });
+    }
+  });
+
   // Create incidents from existing data
   app.post('/api/incidents/create-from-data', requireAuth, async (req, res) => {
     try {
@@ -5570,6 +5811,26 @@ async function initializeAudioPipeline() {
             }
           }
           
+          // Check for keyword matches and trigger notifications
+          try {
+            const { keywordMonitor } = await import('./services/keyword-monitor');
+            const { notificationManager } = await import('./services/notification-manager');
+            
+            // Check if this call matches any notification keywords
+            const matches = await keywordMonitor.checkCall(existingCall.id);
+            
+            if (matches.length > 0) {
+              console.log(`Call ${existingCall.id} matched ${matches.length} keywords, triggering notifications`);
+              
+              // Process each keyword match
+              for (const match of matches) {
+                await notificationManager.processKeywordMatch(match);
+              }
+            }
+          } catch (error) {
+            console.error(`Error checking keywords for call ${existingCall.id}:`, error);
+          }
+          
           // Broadcast updated call
           const updatedCall = await storage.getCall(existingCall.id);
           if (updatedCall) {
@@ -5712,6 +5973,37 @@ async function initializeAudioPipeline() {
     hospitalCallProcessor.start();
   } else {
     console.warn('hospitalCallProcessor not available, skipping hospital call processing');
+  }
+  
+  // Initialize Telegram notification services
+  console.log('Initializing Telegram notification services...');
+  try {
+    const { telegramBot } = await import('./services/telegram-bot');
+    const { keywordMonitor } = await import('./services/keyword-monitor');
+    const { notificationManager } = await import('./services/notification-manager');
+    
+    // Initialize Telegram bot with port 3002
+    await telegramBot.initialize();
+    console.log('Telegram bot service initialized');
+    
+    // Start keyword monitoring service
+    await keywordMonitor.start();
+    console.log('Keyword monitor service started');
+    
+    // Initialize notification manager
+    await notificationManager.initialize();
+    console.log('Notification manager service initialized');
+    
+    // Check if Telegram is configured
+    const telegramConfig = await storage.getTelegramConfig();
+    if (telegramConfig && telegramConfig.isActive) {
+      console.log('Telegram notifications are enabled and configured');
+      await telegramBot.updateConfig(telegramConfig);
+    } else {
+      console.log('Telegram notifications not configured yet - configure via admin panel');
+    }
+  } catch (error) {
+    console.error('Error initializing Telegram notification services:', error);
   }
 }
 

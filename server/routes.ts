@@ -5820,14 +5820,14 @@ async function initializeAudioPipeline() {
             const { notificationManager } = await import('./services/notification-manager');
             
             // Check if this call matches any notification keywords
-            const matches = await keywordMonitor.checkCall(existingCall.id);
+            const matches = await keywordMonitor.checkCallForKeywords(existingCall);
             
             if (matches.length > 0) {
               console.log(`Call ${existingCall.id} matched ${matches.length} keywords, triggering notifications`);
               
               // Process each keyword match
               for (const match of matches) {
-                await notificationManager.processKeywordMatch(match);
+                await notificationManager.processCallNotification(existingCall, match);
               }
             }
           } catch (error) {

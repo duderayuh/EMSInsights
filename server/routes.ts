@@ -5013,7 +5013,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let config;
       if (existing) {
         // Update existing config
-        config = await storage.updateTelegramConfig(existing.id, {
+        config = await storage.upsertTelegramConfig({
+          id: existing.id,
           botToken,
           channelId,
           channelName: channelName || null,
@@ -5022,11 +5023,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           testMode: testMode || false,
           rateLimitPerMinute: rateLimitPerMinute || 20,
           isActive: true,
-          updatedAt: new Date()
+          updatedAt: new Date(),
+          createdBy: existing.createdBy || req.user!.id
         });
       } else {
         // Create new config
-        config = await storage.createTelegramConfig({
+        config = await storage.upsertTelegramConfig({
           botToken,
           channelId,
           channelName: channelName || null,
@@ -5068,24 +5070,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/telegram/notifications', requireAuth, async (req, res) => {
     try {
-      const { callId, keywordId, status, limit = 100 } = req.query;
+      const { callId, keywordId, status, limit = 50 } = req.query;
       
-      let notifications = await storage.getPendingTelegramNotifications();
+      // Use the existing getRecentNotifications function
+      const limitNum = parseInt(limit as string) || 50;
+      let notifications = await storage.getRecentNotifications(limitNum);
       
+      // Apply filters if provided
       if (callId) {
-        notifications = await storage.getTelegramNotificationsByCall(parseInt(callId as string));
-      } else if (keywordId) {
-        notifications = await storage.getTelegramNotificationsByKeyword(parseInt(keywordId as string));
+        notifications = notifications.filter((n: any) => n.callId === parseInt(callId as string));
+      }
+      
+      if (keywordId) {
+        notifications = notifications.filter((n: any) => n.keywordId === parseInt(keywordId as string));
       }
       
       // Apply status filter if provided
       if (status && status !== 'all') {
-        notifications = notifications.filter(n => n.status === status);
+        notifications = notifications.filter((n: any) => n.status === status);
       }
-      
-      // Apply limit
-      const limitNum = parseInt(limit as string) || 100;
-      notifications = notifications.slice(0, limitNum);
       
       res.json(notifications);
     } catch (error) {

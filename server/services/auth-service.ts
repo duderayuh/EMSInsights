@@ -99,19 +99,19 @@ export class AuthService {
     await db.delete(sessions).where(eq(sessions.userId, userId));
   }
 
-  isSuperAdmin(user: User): boolean {
+  async isSuperAdmin(user: User): boolean {
     return user.role === 'super_admin';
   }
 
-  isHospitalAdmin(user: User): boolean {
+  async isHospitalAdmin(user: User): boolean {
     return user.role === 'hospital_admin';
   }
 
-  hasAdminAccess(user: User): boolean {
+  async hasAdminAccess(user: User): boolean {
     return user.role === 'admin' || user.role === 'super_admin' || user.role === 'hospital_admin';
   }
 
-  isAdmin(user: User): boolean {
+  async isAdmin(user: User): boolean {
     // Legacy method for backward compatibility - supports both old 'admin' and new 'super_admin'
     return user.role === 'admin' || user.role === 'super_admin';
   }
@@ -140,8 +140,8 @@ export class AuthService {
   }
 
   async deleteUser(id: number): Promise<boolean> {
-    const result = await db.delete(users).where(eq(users.id, id)).returning();
-    return result.length > 0;
+    const result = await db.delete(users).where(eq(users.id, id));
+    return result.rowCount > 0;
   }
 
   async changePassword(userId: number, currentPassword: string, newPassword: string): Promise<boolean> {

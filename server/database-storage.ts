@@ -1231,4 +1231,15 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(desc(incidents.dispatchTime));
   }
+
+  // Raw SQL query method for services that need direct database access
+  async query(sqlQuery: string): Promise<{ rows: any[] }> {
+    try {
+      const result = await db.execute(sql.raw(sqlQuery));
+      return { rows: result };
+    } catch (error) {
+      console.error('Database query error:', error);
+      throw error;
+    }
+  }
 }

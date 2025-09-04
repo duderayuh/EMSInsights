@@ -781,18 +781,25 @@ except Exception as e:
       });
       
       // Log detailed confidence metrics
+      // Apply post-processing corrections including Unicode detection
+      const postProcessedText = this.applyPostProcessingCorrections(correctedText);
+      
+      // Adjust confidence if static/noise detected
+      const isStaticOrNoise = postProcessedText === '[Static]' || postProcessedText === '[Unable to transcribe]';
+      const adjustedConfidence = isStaticOrNoise ? 0.1 : finalConfidence;
+      
       console.log(`OpenAI Whisper confidence metrics:`, {
-        confidence: (finalConfidence * 100).toFixed(1) + '%',
+        confidence: (adjustedConfidence * 100).toFixed(1) + '%',
         original_confidence: (confidence * 100).toFixed(1) + '%',
         confidence_boost: (confidenceBoost * 100).toFixed(1) + '%',
         segments: transcription.segments?.length || 0,
         duration: transcription.duration || 0,
-        text_preview: correctedText.substring(0, 100)
+        text_preview: postProcessedText.substring(0, 100)
       });
       
       return {
-        utterance: correctedText || '[No transcription available]',
-        confidence: finalConfidence,
+        utterance: postProcessedText || '[No transcription available]',
+        confidence: adjustedConfidence,
         start_ms: 0,
         end_ms: Math.round((transcription.duration || 5) * 1000)
       };
@@ -908,9 +915,18 @@ except Exception as e:
    * Process transcription result with confidence
    */
   private processTranscriptionResult(transcription: any, segmentId: string, confidence: number): TranscriptionResult {
-    const correctedText = emsDictionary.correctTranscript(transcription.text || '');
-    const confidenceBoost = emsDictionary.getConfidenceBoost(transcription.text || '', correctedText);
-    const finalConfidence = Math.min(0.99, confidence + confidenceBoost);
+    // Apply post-processing corrections first (includes Unicode pattern detection)
+    const cleanedText = this.applyPostProcessingCorrections(transcription.text || '');
+    
+    // Apply EMS dictionary corrections
+    const correctedText = emsDictionary.correctTranscript(cleanedText);
+    const confidenceBoost = emsDictionary.getConfidenceBoost(cleanedText, correctedText);
+    
+    // If it's static/noise, set confidence lower
+    const isStaticOrNoise = correctedText === '[Static]' || correctedText === '[Unable to transcribe]';
+    const finalConfidence = isStaticOrNoise 
+      ? 0.1 
+      : Math.min(0.99, confidence + confidenceBoost);
     
     // Track confidence for monitoring
     confidenceMonitor.trackSegmentConfidence(segmentId, finalConfidence).catch(console.error);
@@ -938,9 +954,51 @@ except Exception as e:
     };
   }
 
+  /**
+   * Detect and replace problematic Unicode patterns
+   */
+  private detectAndReplaceUnicodePatterns(transcript: string): { text: string, isStatic: boolean } {
+    // Armenian characters that appear when Whisper tries to transcribe static
+    const armenianPattern = /[\u0560-\u058F]+/g;
+    // Other unusual Unicode ranges that shouldn't appear in English dispatch audio
+    const unusualUnicodePattern = /[\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF\u2C60-\u2C7F\uA720-\uA7FF]+/g;
+    
+    // Check if transcript is mostly (>80%) unusual Unicode characters
+    const armenianMatches = transcript.match(armenianPattern);
+    const unusualMatches = transcript.match(unusualUnicodePattern);
+    const totalUnusualChars = (armenianMatches?.join('').length || 0) + (unusualMatches?.join('').length || 0);
+    const isStatic = totalUnusualChars > transcript.length * 0.8;
+    
+    if (isStatic) {
+      console.log(`Detected static/noise pattern in transcript: "${transcript.substring(0, 50)}..." - replacing with [Static]`);
+      return { text: '[Static]', isStatic: true };
+    }
+    
+    // Replace any remaining unusual patterns with more appropriate markers
+    let cleaned = transcript;
+    cleaned = cleaned.replace(armenianPattern, '[Unable to transcribe]');
+    cleaned = cleaned.replace(unusualUnicodePattern, '[Unable to transcribe]');
+    
+    // Also check for repetitive single characters (another sign of static)
+    if (/^(.)\1{10,}$/.test(cleaned)) {
+      console.log(`Detected repetitive pattern in transcript - replacing with [Static]`);
+      return { text: '[Static]', isStatic: true };
+    }
+    
+    return { text: cleaned, isStatic: false };
+  }
+
   private applyPostProcessingCorrections(transcript: string): string {
+    // First check for Unicode patterns
+    const { text: cleanedFromUnicode, isStatic } = this.detectAndReplaceUnicodePatterns(transcript);
+    
+    // If it's static, return immediately
+    if (isStatic) {
+      return cleanedFromUnicode;
+    }
+    
     // Apply common Indianapolis dispatch transcription corrections
-    let corrected = transcript;
+    let corrected = cleanedFromUnicode;
     
     // BEEPING SOUND CORRECTIONS - Fix hallucinated text for beeping sounds
     // Common hallucinations that should be converted to {beeping}

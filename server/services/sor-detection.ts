@@ -1,4 +1,5 @@
 // SOR (Signature of Release) detection and physician name extraction service
+import { distance as leven } from 'fastest-levenshtein';
 export interface SORDetectionResult {
   isSOR: boolean;
   physicianName?: string;
@@ -66,6 +67,11 @@ export class SORDetectionService {
 
     const normalizedText = transcript.toLowerCase().trim();
     
+    // Handle Unicode replacement markers
+    if (normalizedText === '[static]' || normalizedText === '[unable to transcribe]') {
+      return { isSOR: false, confidence: 0, extractedText: 'Non-speech audio' };
+    }
+    
     // Check if this is just a courtesy phrase, not an actual SOR request
     const isCourtesyPhrase = this.courtesyPhrases.some(phrase => normalizedText.includes(phrase));
     if (isCourtesyPhrase) {
@@ -119,12 +125,86 @@ export class SORDetectionService {
   }
 
   private checkSORKeywords(text: string): { found: boolean; matchedText?: string } {
+    // First try exact match
     for (const keyword of this.sorKeywords) {
       if (text.includes(keyword)) {
         return { found: true, matchedText: keyword };
       }
     }
+    
+    // Then try fuzzy matching for common variations
+    const words = text.split(/\s+/);
+    for (const word of words) {
+      // Special handling for "SOR" variations
+      if (this.isSORVariation(word)) {
+        return { found: true, matchedText: `SOR variation: ${word}` };
+      }
+      
+      // Fuzzy match against keywords (allow up to 2 character differences)
+      for (const keyword of this.sorKeywords) {
+        if (this.fuzzyMatch(word, keyword, 2)) {
+          return { found: true, matchedText: `Fuzzy match: ${keyword}` };
+        }
+      }
+    }
+    
+    // Check for phonetic variations and misspellings
+    const phoneticPatterns = [
+      /\bs\.?\s*o\.?\s*r\.?/i,  // S.O.R, S O R, etc.
+      /\bsor\b/i,  // SOR in any case
+      /\bsignature\s+(?:of\s+)?release/i,
+      /\bsign\s*off\s*release/i,
+      /\bphysician\s+sign/i,
+      /\bdoctor\s+sign/i,
+      /\bneed\s+(?:a\s+)?signature/i,
+      /\brequesting\s+(?:a\s+)?signature/i,
+      /\bmedical\s+authorization/i,
+      /\bphysician\s+authorization/i
+    ];
+    
+    for (const pattern of phoneticPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        return { found: true, matchedText: match[0] };
+      }
+    }
+    
     return { found: false };
+  }
+  
+  /**
+   * Check if a word is likely a variation of "SOR"
+   */
+  private isSORVariation(word: string): boolean {
+    const normalized = word.toLowerCase().replace(/[^a-z]/g, '');
+    
+    // Direct SOR variations
+    const sorVariations = ['sor', 'soar', 'soor', 'sorr', 'sor', 's0r'];
+    if (sorVariations.includes(normalized)) {
+      return true;
+    }
+    
+    // Check if it's close to "sor" (1 character difference)
+    if (normalized.length >= 2 && normalized.length <= 4) {
+      const distance = leven(normalized, 'sor');
+      if (distance <= 1) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Fuzzy string matching using Levenshtein distance
+   */
+  private fuzzyMatch(str1: string, str2: string, maxDistance: number): boolean {
+    if (str1.length < 3 || str2.length < 3) {
+      return false; // Don't fuzzy match very short strings
+    }
+    
+    const distance = leven(str1.toLowerCase(), str2.toLowerCase());
+    return distance <= maxDistance;
   }
 
   private extractPhysicianName(transcript: string): string | undefined {

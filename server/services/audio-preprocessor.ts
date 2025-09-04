@@ -17,9 +17,11 @@ export interface AudioAnalysis {
 
 export class AudioPreprocessor {
   // Energy threshold for detecting beeps/tones vs voice
-  private readonly BEEP_ENERGY_THRESHOLD = 0.95;
+  private readonly BEEP_ENERGY_THRESHOLD = 0.85; // Lowered for better beep detection
   private readonly MIN_VOICE_DURATION = 0.5; // seconds
-  private readonly SILENCE_THRESHOLD = -40; // dB
+  private readonly SILENCE_THRESHOLD = -35; // dB - adjusted for dispatch radio quality
+  private readonly STATIC_FREQUENCY_THRESHOLD = 0.8; // Threshold for static detection
+  private readonly DISPATCH_MIN_SPEECH_RATIO = 0.2; // Minimum speech ratio for valid dispatch audio
 
   async analyzeAudio(audioPath: string): Promise<AudioAnalysis> {
     if (!existsSync(audioPath)) {
@@ -34,8 +36,11 @@ export class AudioPreprocessor {
     }
 
     try {
+      console.log(`Analyzing audio for dispatch content: ${audioPath}`);
+      
       // Get audio duration and basic info
       const duration = await this.getAudioDuration(audioPath);
+      console.log(`Audio duration: ${duration.toFixed(2)}s`);
       
       // Analyze for beeps/tones using FFmpeg
       const energyAnalysis = await this.analyzeEnergyDistribution(audioPath);
@@ -170,16 +175,32 @@ export class AudioPreprocessor {
   ): boolean {
     // If no voice activity detected
     if (!voiceAnalysis.hasVoice) {
+      console.log('Audio detected as pure noise: No voice activity');
       return true;
     }
 
     // If energy distribution suggests monotone beep
     if (energyAnalysis.monoToneRatio > this.BEEP_ENERGY_THRESHOLD) {
+      console.log(`Audio detected as beep/tone: Monotone ratio ${energyAnalysis.monoToneRatio.toFixed(2)}`);
       return true;
     }
 
     // If mostly silence
     if (voiceAnalysis.silenceRatio > 0.95) {
+      console.log(`Audio detected as silence: Silence ratio ${voiceAnalysis.silenceRatio.toFixed(2)}`);
+      return true;
+    }
+    
+    // Additional check for dispatch radio static patterns
+    if (energyAnalysis.monoToneRatio > 0.7 && voiceAnalysis.silenceRatio > 0.5) {
+      console.log('Audio detected as radio static: Combined high monotone and silence');
+      return true;
+    }
+    
+    // Check for too little speech content for dispatch audio
+    const speechRatio = 1 - voiceAnalysis.silenceRatio;
+    if (speechRatio < this.DISPATCH_MIN_SPEECH_RATIO) {
+      console.log(`Audio has insufficient speech content: ${(speechRatio * 100).toFixed(1)}%`);
       return true;
     }
 
